@@ -117,7 +117,7 @@ func New(dir string) *Model {
 				Subtitle: s.ModTime.Format("2006-01-02 15:04") + "  ·  " + shortID(s.ID),
 			})
 		}
-		p := picker.New(items)
+		p := picker.New("Claude sessions in this directory — ↑/↓ and Enter:", items)
 		m.picker = &p
 	}
 	return m

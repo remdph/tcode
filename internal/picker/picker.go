@@ -21,6 +21,7 @@ type Item struct {
 
 // Model is the selector state.
 type Model struct {
+	header        string
 	items         []Item
 	cursor        int
 	offset        int
@@ -40,10 +41,10 @@ var (
 func selBarStyle() lipgloss.Style { return lipgloss.NewStyle().Foreground(theme.Accent) }
 func selSubStyle() lipgloss.Style { return lipgloss.NewStyle().Foreground(theme.Accent) }
 
-// New creates the selector with the given options (the first one should be the
-// "New session" option).
-func New(items []Item) Model {
-	return Model{items: items, width: 40, height: 10}
+// New creates the selector with a header line and the given options. The first
+// option is usually a primary/default action (Item.IsNew).
+func New(header string, items []Item) Model {
+	return Model{header: header, items: items, width: 40, height: 10}
 }
 
 // SetSize sets the available area.
@@ -100,8 +101,7 @@ func (m Model) rowsPerItem() int { return 2 }
 // View renders the selector.
 func (m Model) View() string {
 	var b strings.Builder
-	header := "Claude sessions in this directory — ↑/↓ and Enter:"
-	b.WriteString(truncate(headerStyle.Render(header), m.width))
+	b.WriteString(truncate(headerStyle.Render(m.header), m.width))
 	b.WriteString("\n\n")
 
 	rows := m.rowsPerItem()
@@ -123,10 +123,11 @@ func (m Model) View() string {
 			bar = selBarStyle().Render("▎ ")
 		}
 
-		// Primary line (the plain text is truncated before styling).
+		// Primary line (the plain text is truncated before styling). The
+		// primary/default option (IsNew) gets a "＋" prefix.
 		mainText := it.Title
 		if it.IsNew {
-			mainText = "＋ New session"
+			mainText = "＋ " + it.Title
 		}
 		mainText = truncate(mainText, m.width-2)
 		var main string
@@ -140,8 +141,8 @@ func (m Model) View() string {
 		}
 		b.WriteString(bar + main + "\n")
 
-		// Secondary line (date / id).
-		if !it.IsNew {
+		// Secondary line (subtitle), shown whenever present.
+		if it.Subtitle != "" {
 			subText := truncate(it.Subtitle, m.width-2)
 			if selected {
 				b.WriteString("  " + selSubStyle().Render(subText) + "\n")

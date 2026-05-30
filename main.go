@@ -16,6 +16,8 @@ import (
 	"strings"
 
 	"code-tui/internal/app"
+	"code-tui/internal/launcher"
+	"code-tui/internal/recents"
 	"code-tui/internal/theme"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -41,14 +43,32 @@ func main() {
 		}
 	}
 
-	dir, err := resolveDir(args)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "%s: %v\n", prog, err)
-		os.Exit(1)
+	theme.Load()
+
+	var dir string
+	if len(args) >= 1 {
+		// An explicit directory was given: open it directly.
+		d, err := resolveDir(args)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%s: %v\n", prog, err)
+			os.Exit(1)
+		}
+		dir = d
+	} else {
+		// No argument: show the directory launcher (EXEC DIR + recents).
+		execDir, err := os.Getwd()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%s: %v\n", prog, err)
+			os.Exit(1)
+		}
+		d, ok := runLauncher(execDir)
+		if !ok {
+			return // cancelled
+		}
+		dir = d
 	}
 
-	// Pick up the Omarchy accent color, if present, before anything renders.
-	theme.Load()
+	recents.Add(dir)
 
 	m := app.New(dir)
 	p := tea.NewProgram(m, tea.WithAltScreen())
@@ -58,6 +78,18 @@ func main() {
 		fmt.Fprintf(os.Stderr, "%s: %v\n", prog, err)
 		os.Exit(1)
 	}
+}
+
+// runLauncher shows the directory picker and returns the chosen directory, or
+// ("", false) if the user cancelled.
+func runLauncher(execDir string) (string, bool) {
+	m := launcher.New(execDir, recents.List())
+	res, err := tea.NewProgram(m, tea.WithAltScreen()).Run()
+	if err != nil {
+		return "", false
+	}
+	chosen := res.(launcher.Model).Chosen()
+	return chosen, chosen != ""
 }
 
 // resolveDir determines the project directory to open. With no argument it uses

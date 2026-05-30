@@ -67,11 +67,24 @@ go build -trimpath -ldflags="-s -w" -o ~/.local/bin/tcode .
 Then invoke it from anywhere:
 
 ```bash
-tcode            # opens the current directory as a project
-tcode /some/dir  # opens another directory
+tcode            # shows the project launcher (EXEC DIR + recents)
+tcode /some/dir  # opens that directory directly
 tcode ~/repos/x  # ~ is expanded
 tcode --version  # prints the version (0.1.0)
 ```
+
+### Project launcher
+
+Running `tcode` with **no argument** first shows a launcher (the same selector
+used for Claude sessions) to choose which project to open:
+
+- The first option, **EXEC DIR**, opens the directory you ran `tcode` from.
+- Below it are the **recently opened** directories — each shown by its folder
+  name with the full path on a second line.
+
+Every directory you open is recorded in `~/.config/code-tui/recents.json`.
+Passing a directory argument skips the launcher and opens it directly (but still
+records it).
 
 During development you can also run it without installing:
 
@@ -149,7 +162,9 @@ internal/app/       Root model: layout, focus and shortcuts
 internal/sidebar/   File explorer (tree)
 internal/terminal/  PTY-backed terminal panel + vt emulator
 internal/sessions/  Discovery of past Claude Code sessions
-internal/picker/    Session selector UI
+internal/picker/    Selector UI (sessions and the launcher)
+internal/launcher/  Startup project launcher (EXEC DIR + recents)
+internal/recents/   Recently opened directories
 internal/gitpanel/  Git panel (CHANGES / HISTORY)
 internal/theme/     Accent color (Omarchy integration)
 internal/config/    Per-project settings (panel widths)
