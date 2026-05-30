@@ -313,6 +313,7 @@ func (m *Model) openEditor(path string) {
 	m.editorID = m.nextTermID
 	m.nextTermID++
 	m.editor = terminal.New(m.editorID, filepath.Base(path), m.dir, args)
+	m.editor.SetFocused(true) // the editor always shows its cursor
 	m.editorName = filepath.Base(path)
 	m.editorHint = hint
 	m.layout() // size the editor before starting it
@@ -422,15 +423,18 @@ func (m *Model) View() string {
 	// Right column: CLAUDE on top, TERMINAL below. The TERMINAL label uses the
 	// same header style as the others. If the session picker is active, it
 	// takes over the CLAUDE area.
+	m.claude.SetFocused(m.focus == focusClaude)
 	claudeView := m.claude.View()
 	if m.picker != nil {
 		claudeView = m.picker.View()
 	}
+	at := m.activeTermModel()
+	at.SetFocused(m.focus == focusTerminal)
 	divider := hLine(m.rightInnerW)
 	claudeHeader := headerLabel(m.claude.Name(), m.focus == focusClaude, m.rightInnerW)
 	claudeContent := blockRect(claudeView, m.rightInnerW, m.claudeInnerH)
 	termHeader := terminalHeader(len(m.terms), m.activeTerm, m.focus == focusTerminal, m.rightInnerW)
-	termContent := blockRect(m.activeTermModel().View(), m.rightInnerW, m.termInnerH)
+	termContent := blockRect(at.View(), m.rightInnerW, m.termInnerH)
 	right := lipgloss.JoinVertical(lipgloss.Left,
 		divider, // above CLAUDE title
 		claudeHeader,

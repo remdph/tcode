@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	tea "github.com/charmbracelet/bubbletea"
+	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/vt"
 	"github.com/creack/pty"
 )
@@ -39,7 +40,16 @@ type Model struct {
 	width, height int
 	started       bool
 	dead          bool
+
+	// Cursor overlay state.
+	emuMu         sync.Mutex // guards the cursor overlay against readLoop writes
+	focused       bool       // draw a synthetic cursor when true
+	cursorVisible bool       // the program's cursor visibility (DECTCEM)
 }
+
+// SetFocused controls whether this panel draws a synthetic cursor at the
+// emulator's cursor position (the embedded screen has no real hardware cursor).
+func (m *Model) SetFocused(f bool) { m.focused = f }
 
 // New creates a terminal panel that will run args[0] with args[1:] in dir.
 // The process is not launched until Start is called.
@@ -75,6 +85,10 @@ func (m *Model) Start(prog *tea.Program) error {
 	m.mu.Unlock()
 
 	m.emu = vt.NewSafeEmulator(w, h)
+	m.cursorVisible = true
+	m.emu.SetCallbacks(vt.Callbacks{
+		CursorVisibility: func(visible bool) { m.cursorVisible = visible },
+	})
 
 	c := exec.Command(m.args[0], m.args[1:]...)
 	c.Dir = m.dir
@@ -98,7 +112,9 @@ func (m *Model) readLoop() {
 	for {
 		n, err := m.ptmx.Read(buf)
 		if n > 0 {
+			m.emuMu.Lock()
 			m.emu.Write(buf[:n])
+			m.emuMu.Unlock()
 			if m.prog != nil {
 				m.prog.Send(RefreshMsg{ID: m.id})
 			}
@@ -166,12 +182,42 @@ func (m *Model) SendKey(k tea.KeyMsg) {
 	}
 }
 
-// View renders the emulator screen as a string with ANSI styling.
+// View renders the emulator screen as a string with ANSI styling. When the
+// panel is focused and the program's cursor is visible, it draws a synthetic
+// block cursor (reverse video) at the cursor position, since the embedded
+// screen has no real hardware cursor.
 func (m *Model) View() string {
 	if m.emu == nil {
 		return ""
 	}
-	return m.emu.Render()
+	if !m.focused {
+		return m.emu.Render()
+	}
+
+	m.emuMu.Lock()
+	defer m.emuMu.Unlock()
+
+	if !m.cursorVisible {
+		return m.emu.Render()
+	}
+	pos := m.emu.CursorPosition()
+	cell := m.emu.CellAt(pos.X, pos.Y)
+	if cell == nil {
+		return m.emu.Render()
+	}
+
+	orig := cell.Clone()
+	cur := cell.Clone()
+	if cur.Content == "" {
+		cur.Content = " "
+		cur.Width = 1
+	}
+	cur.Style.Attrs |= uv.AttrReverse
+
+	m.emu.SetCell(pos.X, pos.Y, cur)
+	out := m.emu.Render()
+	m.emu.SetCell(pos.X, pos.Y, orig)
+	return out
 }
 
 // Close terminates the process and closes the PTY.
