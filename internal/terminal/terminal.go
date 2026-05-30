@@ -57,6 +57,13 @@ func New(id int, name, dir string, args []string) *Model {
 // Name devuelve el rótulo del panel.
 func (m *Model) Name() string { return m.name }
 
+// SetArgs fija el comando a ejecutar. Solo tiene efecto si se llama antes de
+// Start.
+func (m *Model) SetArgs(args []string) { m.args = args }
+
+// Started indica si el proceso ya se lanzó.
+func (m *Model) Started() bool { return m.started }
+
 // Dead indica si el proceso subyacente terminó.
 func (m *Model) Dead() bool { return m.dead }
 

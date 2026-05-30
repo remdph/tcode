@@ -5,6 +5,8 @@ package app
 import (
 	"os"
 
+	"code-tui/internal/picker"
+	"code-tui/internal/sessions"
 	"code-tui/internal/sidebar"
 	"code-tui/internal/terminal"
 
@@ -36,6 +38,10 @@ type Model struct {
 	started     bool
 	prog        *tea.Program
 
+	// picker es el selector de sesión que ocupa el panel CLAUDE hasta que el
+	// usuario elige; nil si no hay sesiones pasadas o ya se eligió.
+	picker *picker.Model
+
 	// Geometría calculada por layout().
 	sbInnerW                 int
 	rightInnerW              int
@@ -50,15 +56,49 @@ func New(dir string) *Model {
 	if shell == "" {
 		shell = "/bin/bash"
 	}
-	return &Model{
+
+	m := &Model{
 		dir:         dir,
 		sidebarPref: true,
 		showSidebar: true,
 		focus:       focusClaude,
 		sidebar:     sidebar.New(dir),
-		claude:      terminal.New(1, "CLAUDE", dir, []string{"claude"}),
+		claude:      terminal.New(1, "CLAUDE", dir, claudeArgs(nil)),
 		term:        terminal.New(2, "TERMINAL", dir, []string{shell}),
 	}
+
+	// Si hay sesiones pasadas en este directorio, se muestra un selector en el
+	// panel CLAUDE; la primera opción siempre es crear una sesión nueva.
+	if past := sessions.List(dir); len(past) > 0 {
+		items := []picker.Item{{Title: "Nueva sesión", IsNew: true}}
+		for _, s := range past {
+			items = append(items, picker.Item{
+				ID:       s.ID,
+				Title:    s.Title,
+				Subtitle: s.ModTime.Format("2006-01-02 15:04") + "  ·  " + shortID(s.ID),
+			})
+		}
+		p := picker.New(items)
+		m.picker = &p
+	}
+	return m
+}
+
+// claudeArgs construye el comando de claude. Siempre se lanza con
+// --dangerously-skip-permissions; si resumeID no es vacío, se reanuda esa sesión.
+func claudeArgs(resumeID *string) []string {
+	args := []string{"claude", "--dangerously-skip-permissions"}
+	if resumeID != nil && *resumeID != "" {
+		args = append(args, "--resume", *resumeID)
+	}
+	return args
+}
+
+func shortID(id string) string {
+	if len(id) > 8 {
+		return id[:8]
+	}
+	return id
 }
 
 // SetProgram guarda la referencia al programa para que los terminales puedan
@@ -118,6 +158,20 @@ func (m *Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.sidebar, cmd = m.sidebar.Update(k)
 		return m, cmd
 	case focusClaude:
+		// Mientras el selector de sesión esté activo, las teclas van a él.
+		if m.picker != nil {
+			updated, chosen := m.picker.Update(k)
+			*m.picker = updated
+			if chosen != nil {
+				m.picker = nil
+				if chosen.IsNew {
+					m.startClaude(nil)
+				} else {
+					m.startClaude(&chosen.ID)
+				}
+			}
+			return m, nil
+		}
 		m.claude.SendKey(k)
 	case focusTerminal:
 		m.term.SendKey(k)
@@ -135,8 +189,20 @@ func (m *Model) toggleSidebar() {
 }
 
 func (m *Model) startTerminals() {
-	_ = m.claude.Start(m.prog)
 	_ = m.term.Start(m.prog)
+	// La shell siempre arranca; claude solo si no hay selector pendiente.
+	if m.picker == nil {
+		m.startClaude(nil)
+	}
+}
+
+// startClaude lanza claude-cli (nueva sesión o reanudando resumeID).
+func (m *Model) startClaude(resumeID *string) {
+	if m.claude.Started() {
+		return
+	}
+	m.claude.SetArgs(claudeArgs(resumeID))
+	_ = m.claude.Start(m.prog)
 }
 
 func (m *Model) cleanup() {
@@ -187,6 +253,9 @@ func (m *Model) layout() {
 	m.sidebar.SetSize(max(sbW, 1), max(m.sbInnerH, 1))
 	m.claude.SetSize(max(rightW, 1), max(m.claudeInnerH, 1))
 	m.term.SetSize(max(rightW, 1), max(m.termInnerH, 1))
+	if m.picker != nil {
+		m.picker.SetSize(max(rightW, 1), max(m.claudeInnerH, 1))
+	}
 }
 
 // View implementa tea.Model.
@@ -198,8 +267,13 @@ func (m *Model) View() string {
 	bodyH := m.height - 1
 
 	// Columna derecha: CLAUDE arriba, separador con rótulo, TERMINAL abajo.
+	// Si el selector de sesión está activo, ocupa el área de CLAUDE.
+	claudeView := m.claude.View()
+	if m.picker != nil {
+		claudeView = m.picker.View()
+	}
 	rightHeader := headerLabel(m.claude.Name(), m.focus == focusClaude, m.rightInnerW)
-	claudeContent := blockRect(m.claude.View(), m.rightInnerW, m.claudeInnerH)
+	claudeContent := blockRect(claudeView, m.rightInnerW, m.claudeInnerH)
 	sep := horizSep(m.term.Name(), m.focus == focusTerminal, m.rightInnerW)
 	termContent := blockRect(m.term.View(), m.rightInnerW, m.termInnerH)
 	right := lipgloss.JoinVertical(lipgloss.Left, rightHeader, claudeContent, sep, termContent)

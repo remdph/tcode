@@ -27,6 +27,20 @@ ejecuta su proceso en un PTY y se renderiza mediante un emulador de terminal
 ([`charmbracelet/x/vt`](https://github.com/charmbracelet/x)). Ambos arrancan en
 el mismo directorio de trabajo.
 
+### Sesiones de Claude
+
+claude-cli se lanza siempre con `claude --dangerously-skip-permissions`. Al
+abrir el panel CLAUDE, code-tui busca **sesiones pasadas** de Claude Code en ese
+directorio (en `~/.claude/projects/<ruta>`):
+
+- Si **no hay** ninguna, arranca directamente una sesión nueva.
+- Si **las hay**, muestra un selector en el panel CLAUDE. La **primera opción es
+  siempre crear una sesión nueva**; debajo se listan las sesiones existentes
+  (primer mensaje + fecha), de la más reciente a la más antigua. Reanudar una
+  sesión usa `claude --dangerously-skip-permissions --resume <id>`.
+
+  Navega con `↑/↓` (o `j/k`) y confirma con `Enter`.
+
 ## Uso
 
 ```bash
