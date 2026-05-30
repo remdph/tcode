@@ -94,6 +94,15 @@ columns, and comes back when it is widened again (unless you hid it manually).
 > **`Ctrl+B`**. `Super+B` is recognized if your terminal happens to send it (the
 > Kitty keyboard protocol), but it is not guaranteed.
 
+## Theming
+
+If an [Omarchy](https://omarchy.org) theme is active, code-tui picks up its
+accent color and uses it for every focus/selection highlight (focused panel
+headers, the status bar, the session picker and the selected file in the
+explorer). It reads `accent` (and `selection_foreground` for contrast) from
+`~/.config/omarchy/current/theme/colors.toml`. Without Omarchy it falls back to
+a built-in blue.
+
 ## Layout
 
 ```
@@ -103,6 +112,7 @@ internal/sidebar/   File explorer (tree)
 internal/terminal/  PTY-backed terminal panel + vt emulator
 internal/sessions/  Discovery of past Claude Code sessions
 internal/picker/    Session selector UI
+internal/theme/     Accent color (Omarchy integration)
 ```
 
 ## Status

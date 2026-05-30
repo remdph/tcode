@@ -8,6 +8,8 @@ import (
 	"sort"
 	"strings"
 
+	"code-tui/internal/theme"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -32,10 +34,15 @@ type Model struct {
 }
 
 var (
-	dirStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("75"))
-	fileStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("250"))
-	selectedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("231")).Background(lipgloss.Color("24"))
+	dirStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("75"))
+	fileStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("250"))
 )
+
+// selectedStyle highlights the selected row using the theme accent. It is built
+// at render time so it picks up the theme loaded at startup.
+func selectedStyle() lipgloss.Style {
+	return lipgloss.NewStyle().Foreground(theme.OnAccent).Background(theme.Accent)
+}
 
 // New creates the explorer pointing at dir.
 func New(dir string) Model {
@@ -185,7 +192,7 @@ func (m Model) View() string {
 		label = truncate(label, m.width)
 		if i == m.cursor {
 			label = padRight(label, m.width)
-			lines = append(lines, selectedStyle.Render(label))
+			lines = append(lines, selectedStyle().Render(label))
 		} else if n.isDir {
 			lines = append(lines, dirStyle.Render(label))
 		} else {

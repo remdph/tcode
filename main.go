@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"code-tui/internal/app"
+	"code-tui/internal/theme"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -24,6 +25,9 @@ func main() {
 	if abs, err := filepath.Abs(dir); err == nil {
 		dir = abs
 	}
+
+	// Pick up the Omarchy accent color, if present, before anything renders.
+	theme.Load()
 
 	m := app.New(dir)
 	p := tea.NewProgram(m, tea.WithAltScreen())

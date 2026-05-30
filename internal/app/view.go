@@ -3,13 +3,14 @@ package app
 import (
 	"strings"
 
+	"code-tui/internal/theme"
+
 	"github.com/charmbracelet/lipgloss"
 )
 
 var (
-	focusedColor = lipgloss.Color("39")  // bright blue
-	dimColor     = lipgloss.Color("240") // gray (seams)
-	titleColor   = lipgloss.Color("245")
+	dimColor   = lipgloss.Color("240") // gray (seams)
+	titleColor = lipgloss.Color("245")
 )
 
 // headerLabel draws a panel's label row (no box), spanning the full width.
@@ -24,7 +25,7 @@ func headerLabel(label string, focused bool, w int) string {
 		Width(w).
 		MaxWidth(w)
 	if focused {
-		st = st.Foreground(lipgloss.Color("231")).Background(focusedColor)
+		st = st.Foreground(theme.OnAccent).Background(theme.Accent)
 	} else {
 		st = st.Foreground(titleColor)
 	}
@@ -87,8 +88,8 @@ func (m *Model) statusBar() string {
 	}
 
 	seg := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("231")).
-		Background(focusedColor).
+		Foreground(theme.OnAccent).
+		Background(theme.Accent).
 		Bold(true).
 		Padding(0, 1).
 		Render(focusName)

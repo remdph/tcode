@@ -5,6 +5,8 @@ package picker
 import (
 	"strings"
 
+	"code-tui/internal/theme"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -30,10 +32,13 @@ var (
 	newStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("78")).Bold(true)
 	titleStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
 	subtitleStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-	selBarStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("39"))
 	selTextStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("231")).Bold(true)
-	selSubStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("153"))
 )
+
+// accent-derived styles are built at render time so they pick up the theme
+// loaded at startup.
+func selBarStyle() lipgloss.Style { return lipgloss.NewStyle().Foreground(theme.Accent) }
+func selSubStyle() lipgloss.Style { return lipgloss.NewStyle().Foreground(theme.Accent) }
 
 // New creates the selector with the given options (the first one should be the
 // "New session" option).
@@ -115,7 +120,7 @@ func (m Model) View() string {
 
 		bar := "  "
 		if selected {
-			bar = selBarStyle.Render("▎ ")
+			bar = selBarStyle().Render("▎ ")
 		}
 
 		// Primary line (the plain text is truncated before styling).
@@ -139,7 +144,7 @@ func (m Model) View() string {
 		if !it.IsNew {
 			subText := truncate(it.Subtitle, m.width-2)
 			if selected {
-				b.WriteString("  " + selSubStyle.Render(subText) + "\n")
+				b.WriteString("  " + selSubStyle().Render(subText) + "\n")
 			} else {
 				b.WriteString("  " + subtitleStyle.Render(subText) + "\n")
 			}
