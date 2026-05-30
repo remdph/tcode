@@ -82,6 +82,7 @@ func (m *Model) Start(prog *tea.Program) error {
 	m.ptmx = ptmx
 	m.started = true
 	go m.readLoop()
+	go m.responseLoop()
 	return nil
 }
 
@@ -101,6 +102,24 @@ func (m *Model) readLoop() {
 			if m.prog != nil {
 				m.prog.Send(ExitMsg{ID: m.id, Err: err})
 			}
+			return
+		}
+	}
+}
+
+// responseLoop drena las respuestas que el emulador genera ante las consultas
+// del proceso (posición del cursor, atributos del dispositivo, etc.) y las
+// devuelve al PTY. Es imprescindible: el emulador escribe esas respuestas en un
+// io.Pipe síncrono, así que sin un lector concurrente su Write se bloquea y
+// congela toda la terminal.
+func (m *Model) responseLoop() {
+	buf := make([]byte, 4096)
+	for {
+		n, err := m.emu.Read(buf)
+		if n > 0 && m.ptmx != nil {
+			_, _ = m.ptmx.Write(buf[:n])
+		}
+		if err != nil {
 			return
 		}
 	}
