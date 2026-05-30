@@ -120,9 +120,14 @@ func (m *Model) statusBar() string {
 		Padding(0, 1).
 		Render(focusName)
 
-	hints := " Ctrl+B explorer · Alt+1 Claude · Alt+2 terminal · Ctrl+Q quit"
-	if m.autoHidden {
+	var hints string
+	switch {
+	case m.focus == focusTerminal:
+		hints = " Alt++ new tab · Alt+- close · Alt+←/→ switch · Alt+1 Claude · Ctrl+Q quit"
+	case m.autoHidden:
 		hints = " explorer hidden (window too narrow) · Alt+1/2 focus · Ctrl+Q quit"
+	default:
+		hints = " Ctrl+B explorer · Alt+1 Claude · Alt+2 terminal · Ctrl+Q quit"
 	}
 	rest := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("250")).
