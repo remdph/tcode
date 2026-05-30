@@ -29,7 +29,12 @@ type Model struct {
 
 	sidebar sidebar.Model
 	claude  *terminal.Model
-	term    *terminal.Model
+
+	// terms holds the terminal tabs; activeTerm is the visible/focused one.
+	terms      []*terminal.Model
+	activeTerm int
+	nextTermID int
+	shell      string
 
 	focus       focus
 	sidebarPref bool // what the user wants (Ctrl+B)
@@ -59,11 +64,13 @@ func New(dir string) *Model {
 
 	m := &Model{
 		dir:         dir,
+		shell:       shell,
 		sidebarPref: false, // the explorer starts hidden (toggle with Ctrl+B)
 		focus:       focusClaude,
 		sidebar:     sidebar.New(dir),
 		claude:      terminal.New(1, "CLAUDE", dir, claudeArgs(nil)),
-		term:        terminal.New(2, "TERMINAL", dir, []string{shell}),
+		terms:       []*terminal.Model{terminal.New(2, "TERMINAL", dir, []string{shell})},
+		nextTermID:  3,
 	}
 
 	// If there are past sessions in this directory, a selector is shown in the
@@ -147,6 +154,12 @@ func (m *Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.focus = focusSidebar
 		}
 		return m, nil
+	case k.Alt && (runeIs(k, '+') || runeIs(k, '=')):
+		m.newTerminal() // '=' shares the key with '+'
+		return m, nil
+	case k.Alt && runeIs(k, '-'):
+		m.closeTerminal()
+		return m, nil
 	}
 
 	// Forward to the focused panel.
@@ -172,7 +185,15 @@ func (m *Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.claude.SendKey(k)
 	case focusTerminal:
-		m.term.SendKey(k)
+		// Switch tabs with Alt+Left/Right; everything else goes to the terminal.
+		switch {
+		case k.Alt && k.Type == tea.KeyLeft:
+			m.switchTerm(-1)
+		case k.Alt && k.Type == tea.KeyRight:
+			m.switchTerm(1)
+		default:
+			m.activeTermModel().SendKey(k)
+		}
 	}
 	return m, nil
 }
@@ -193,11 +214,47 @@ func (m *Model) toggleSidebar() {
 }
 
 func (m *Model) startTerminals() {
-	_ = m.term.Start(m.prog)
+	for _, t := range m.terms {
+		_ = t.Start(m.prog)
+	}
 	// The shell always starts; claude only if there is no pending selector.
 	if m.picker == nil {
 		m.startClaude(nil)
 	}
+}
+
+// activeTermModel returns the terminal of the active tab.
+func (m *Model) activeTermModel() *terminal.Model { return m.terms[m.activeTerm] }
+
+// newTerminal opens a new terminal tab, makes it active and focuses it.
+func (m *Model) newTerminal() {
+	t := terminal.New(m.nextTermID, "TERMINAL", m.dir, []string{m.shell})
+	m.nextTermID++
+	t.SetSize(max(m.rightInnerW, 1), max(m.termInnerH, 1))
+	if m.started {
+		_ = t.Start(m.prog)
+	}
+	m.terms = append(m.terms, t)
+	m.activeTerm = len(m.terms) - 1
+	m.focus = focusTerminal
+}
+
+// closeTerminal closes the active tab, keeping at least one terminal open.
+func (m *Model) closeTerminal() {
+	if len(m.terms) <= 1 {
+		return
+	}
+	m.terms[m.activeTerm].Close()
+	m.terms = append(m.terms[:m.activeTerm], m.terms[m.activeTerm+1:]...)
+	if m.activeTerm >= len(m.terms) {
+		m.activeTerm = len(m.terms) - 1
+	}
+}
+
+// switchTerm moves the active tab by delta (wrapping around).
+func (m *Model) switchTerm(delta int) {
+	n := len(m.terms)
+	m.activeTerm = (m.activeTerm + delta + n) % n
 }
 
 // startClaude launches claude-cli (new session, or resuming resumeID).
@@ -211,7 +268,9 @@ func (m *Model) startClaude(resumeID *string) {
 
 func (m *Model) cleanup() {
 	m.claude.Close()
-	m.term.Close()
+	for _, t := range m.terms {
+		t.Close()
+	}
 }
 
 // minWidthForSidebar is the minimum window width (in columns) below which the
@@ -261,7 +320,9 @@ func (m *Model) layout() {
 
 	m.sidebar.SetSize(max(sbW, 1), max(m.sbInnerH, 1))
 	m.claude.SetSize(max(rightW, 1), max(m.claudeInnerH, 1))
-	m.term.SetSize(max(rightW, 1), max(m.termInnerH, 1))
+	for _, t := range m.terms {
+		t.SetSize(max(rightW, 1), max(m.termInnerH, 1))
+	}
 	if m.picker != nil {
 		m.picker.SetSize(max(rightW, 1), max(m.claudeInnerH, 1))
 	}
@@ -285,8 +346,8 @@ func (m *Model) View() string {
 	divider := hLine(m.rightInnerW)
 	claudeHeader := headerLabel(m.claude.Name(), m.focus == focusClaude, m.rightInnerW)
 	claudeContent := blockRect(claudeView, m.rightInnerW, m.claudeInnerH)
-	termHeader := headerLabel(m.term.Name(), m.focus == focusTerminal, m.rightInnerW)
-	termContent := blockRect(m.term.View(), m.rightInnerW, m.termInnerH)
+	termHeader := terminalHeader(len(m.terms), m.activeTerm, m.focus == focusTerminal, m.rightInnerW)
+	termContent := blockRect(m.activeTermModel().View(), m.rightInnerW, m.termInnerH)
 	right := lipgloss.JoinVertical(lipgloss.Left,
 		divider, // above CLAUDE title
 		claudeHeader,

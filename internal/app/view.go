@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"strings"
 
 	"code-tui/internal/theme"
@@ -30,6 +31,31 @@ func headerLabel(label string, focused bool, w int) string {
 		st = st.Foreground(titleColor)
 	}
 	return st.Render(" " + label)
+}
+
+// terminalHeader draws the TERMINAL label followed by one tab chip per open
+// terminal. The active tab is highlighted with the theme accent; the label is
+// accent-colored when the panel is focused.
+func terminalHeader(count, active int, focused bool, w int) string {
+	if w < 1 {
+		w = 1
+	}
+	labelStyle := lipgloss.NewStyle().Bold(true).Foreground(titleColor)
+	if focused {
+		labelStyle = labelStyle.Foreground(theme.Accent)
+	}
+	parts := []string{labelStyle.Render(" TERMINAL ")}
+	for i := 0; i < count; i++ {
+		chip := fmt.Sprintf(" %d ", i+1)
+		if i == active {
+			parts = append(parts, lipgloss.NewStyle().
+				Foreground(theme.OnAccent).Background(theme.Accent).Bold(true).Render(chip))
+		} else {
+			parts = append(parts, lipgloss.NewStyle().Foreground(dimColor).Render(chip))
+		}
+	}
+	line := lipgloss.JoinHorizontal(lipgloss.Top, parts...)
+	return lipgloss.NewStyle().Inline(true).Width(w).MaxWidth(w).Render(line)
 }
 
 // hLine draws a horizontal divider line of width w.

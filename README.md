@@ -72,13 +72,22 @@ go build -o code-tui .
 
 ## Shortcuts
 
-| Key       | Action                                  |
-|-----------|-----------------------------------------|
-| `Ctrl+B`  | Show / hide the side explorer           |
-| `Alt+1`   | Focus the CLAUDE panel                  |
-| `Alt+2`   | Focus the TERMINAL panel                |
-| `Alt+3`   | Focus the explorer (when visible)       |
-| `Ctrl+Q`  | Quit                                    |
+| Key             | Action                                          |
+|-----------------|-------------------------------------------------|
+| `Ctrl+B`        | Show / hide the side explorer (and focus it)    |
+| `Alt+1`         | Focus the CLAUDE panel                          |
+| `Alt+2`         | Focus the TERMINAL panel                        |
+| `Alt+3`         | Focus the explorer (when visible)               |
+| `Alt++`         | Open a new terminal tab (and focus it)          |
+| `Alt+-`         | Close the current terminal tab (keeps one)      |
+| `Alt+←` / `Alt+→` | Switch terminal tab (only when TERMINAL focused) |
+| `Ctrl+Q`        | Quit                                            |
+
+Showing the explorer with `Ctrl+B` moves focus to it; hiding it returns focus to
+CLAUDE.
+
+The TERMINAL panel supports multiple tabs, shown next to its label (the active
+one is highlighted with the accent color). Each tab is an independent shell.
 
 In the explorer (when focused): `↑/↓` or `j/k` to move, `Enter`/`→` to expand or
 collapse folders, `←` to collapse.
