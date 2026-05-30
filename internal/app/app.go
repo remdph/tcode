@@ -30,7 +30,9 @@ type Model struct {
 	term    *terminal.Model
 
 	focus       focus
-	showSidebar bool
+	sidebarPref bool // lo que el usuario quiere (Ctrl+B)
+	showSidebar bool // visibilidad efectiva (pref + ancho disponible)
+	autoHidden  bool // oculto automáticamente por ancho insuficiente
 	started     bool
 	prog        *tea.Program
 
@@ -50,6 +52,7 @@ func New(dir string) *Model {
 	}
 	return &Model{
 		dir:         dir,
+		sidebarPref: true,
 		showSidebar: true,
 		focus:       focusClaude,
 		sidebar:     sidebar.New(dir),
@@ -127,10 +130,7 @@ func runeIs(k tea.KeyMsg, r rune) bool {
 }
 
 func (m *Model) toggleSidebar() {
-	m.showSidebar = !m.showSidebar
-	if !m.showSidebar && m.focus == focusSidebar {
-		m.focus = focusClaude
-	}
+	m.sidebarPref = !m.sidebarPref
 	m.layout()
 }
 
@@ -144,6 +144,10 @@ func (m *Model) cleanup() {
 	m.term.Close()
 }
 
+// minWidthForSidebar es el ancho mínimo de ventana (en columnas) por debajo del
+// cual el explorador se oculta automáticamente para dar espacio a los paneles.
+const minWidthForSidebar = 80
+
 // layout calcula la geometría de los paneles y la propaga.
 func (m *Model) layout() {
 	if m.width <= 0 || m.height <= 0 {
@@ -153,6 +157,14 @@ func (m *Model) layout() {
 	const titleH = 1   // rótulo encima de cada panel
 	const borderH = 2  // borde superior + inferior
 	const borderW = 2  // borde izquierdo + derecho
+
+	// Visibilidad efectiva: lo que el usuario quiere, pero solo si la ventana es
+	// suficientemente ancha. Si no, se oculta automáticamente (responsive).
+	m.showSidebar = m.sidebarPref && m.width >= minWidthForSidebar
+	m.autoHidden = m.sidebarPref && !m.showSidebar
+	if !m.showSidebar && m.focus == focusSidebar {
+		m.focus = focusClaude
+	}
 
 	bodyH := m.height - statusH
 

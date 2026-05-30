@@ -65,6 +65,9 @@ func (m *Model) statusBar() string {
 		Render(focusName)
 
 	hints := " Ctrl+B explorador · Alt+1/2/3 foco · Ctrl+Q salir"
+	if m.autoHidden {
+		hints = " explorador oculto · Alt+2/3 foco · Ctrl+Q salir"
+	}
 	rest := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("250")).
 		Background(lipgloss.Color("236")).
@@ -72,6 +75,7 @@ func (m *Model) statusBar() string {
 
 	bar := lipgloss.JoinHorizontal(lipgloss.Left, seg, rest)
 	return lipgloss.NewStyle().
+		Inline(true). // una sola línea: trunca en vez de envolver
 		Width(m.width).
 		MaxWidth(m.width).
 		Background(lipgloss.Color("236")).
