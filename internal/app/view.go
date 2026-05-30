@@ -33,6 +33,30 @@ func headerLabel(label string, focused bool, w int) string {
 	return st.Render(" " + label)
 }
 
+// editorView renders the floating editor box centered over the screen.
+func (m *Model) editorView() string {
+	cw, ch := m.editorDims()
+
+	title := lipgloss.NewStyle().
+		Foreground(theme.OnAccent).
+		Background(theme.Accent).
+		Bold(true).
+		Inline(true).
+		Width(cw).
+		MaxWidth(cw).
+		Render(" " + m.editorName + "  —  " + m.editorHint)
+
+	content := blockRect(m.editor.View(), cw, ch)
+	inner := lipgloss.JoinVertical(lipgloss.Left, title, content)
+
+	box := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(theme.Accent).
+		Render(inner)
+
+	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, box)
+}
+
 // terminalHeader draws the TERMINAL label followed by one tab chip per open
 // terminal. The active tab is highlighted with the theme accent; the label is
 // accent-colored when the panel is focused.

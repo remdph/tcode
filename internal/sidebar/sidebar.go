@@ -14,6 +14,9 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+// OpenFileMsg is emitted when the user presses Enter on a file.
+type OpenFileMsg struct{ Path string }
+
 type node struct {
 	name     string
 	path     string
@@ -109,8 +112,10 @@ func (m *Model) SetSize(w, h int) {
 	m.width, m.height = w, h
 }
 
-// Update handles navigation when the explorer is focused.
+// Update handles navigation when the explorer is focused. Pressing Enter on a
+// file returns a command that emits OpenFileMsg.
 func (m Model) Update(k tea.KeyMsg) (Model, tea.Cmd) {
+	var cmd tea.Cmd
 	switch k.String() {
 	case "up", "k":
 		if m.cursor > 0 {
@@ -121,12 +126,17 @@ func (m Model) Update(k tea.KeyMsg) (Model, tea.Cmd) {
 			m.cursor++
 		}
 	case "enter", "right", "l":
-		if n := m.current(); n != nil && n.isDir {
-			if !n.expanded && !n.loaded {
-				loadChildren(n)
+		if n := m.current(); n != nil {
+			if n.isDir {
+				if !n.expanded && !n.loaded {
+					loadChildren(n)
+				}
+				n.expanded = !n.expanded
+				m.rebuild()
+			} else if k.String() == "enter" {
+				path := n.path
+				cmd = func() tea.Msg { return OpenFileMsg{Path: path} }
 			}
-			n.expanded = !n.expanded
-			m.rebuild()
 		}
 	case "left", "h":
 		if n := m.current(); n != nil {
@@ -141,7 +151,7 @@ func (m Model) Update(k tea.KeyMsg) (Model, tea.Cmd) {
 		m.cursor = len(m.flat) - 1
 	}
 	m.ensureVisible()
-	return m, nil
+	return m, cmd
 }
 
 func (m *Model) current() *node {

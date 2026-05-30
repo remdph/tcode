@@ -4,6 +4,8 @@ package app
 
 import (
 	"os"
+	"os/exec"
+	"path/filepath"
 
 	"code-tui/internal/picker"
 	"code-tui/internal/sessions"
@@ -46,6 +48,13 @@ type Model struct {
 	// picker is the session selector that occupies the CLAUDE panel until the
 	// user chooses; nil when there are no past sessions or one was already chosen.
 	picker *picker.Model
+
+	// editor is the floating editor overlay (nano/vi) while a file is open;
+	// nil otherwise.
+	editor     *terminal.Model
+	editorID   int
+	editorName string
+	editorHint string
 
 	// Geometry computed by layout().
 	sbInnerW                 int
@@ -127,7 +136,19 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		return m.handleKey(msg)
 
-	case terminal.RefreshMsg, terminal.ExitMsg:
+	case sidebar.OpenFileMsg:
+		m.openEditor(msg.Path)
+		return m, nil
+
+	case terminal.ExitMsg:
+		// Closing the editor (e.g. quitting nano) dismisses the overlay.
+		if m.editor != nil && msg.ID == m.editorID {
+			m.editor.Close()
+			m.editor = nil
+		}
+		return m, nil
+
+	case terminal.RefreshMsg:
 		// A repaint is enough; Bubble Tea calls View after every Update.
 		return m, nil
 	}
@@ -135,6 +156,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// While the floating editor is open, every key goes to it; it closes on its
+	// own exit (Ctrl+X in nano, :q in vi).
+	if m.editor != nil {
+		m.editor.SendKey(k)
+		return m, nil
+	}
+
 	// Global shortcuts (intercepted before forwarding to the focused panel).
 	switch {
 	case k.Type == tea.KeyCtrlQ:
@@ -271,6 +299,52 @@ func (m *Model) cleanup() {
 	for _, t := range m.terms {
 		t.Close()
 	}
+	if m.editor != nil {
+		m.editor.Close()
+	}
+}
+
+// openEditor opens path in a floating editor (nano, or vi as a fallback).
+func (m *Model) openEditor(path string) {
+	args, hint := editorCommand(path)
+	if args == nil {
+		return // neither nano nor vi available
+	}
+	m.editorID = m.nextTermID
+	m.nextTermID++
+	m.editor = terminal.New(m.editorID, filepath.Base(path), m.dir, args)
+	m.editorName = filepath.Base(path)
+	m.editorHint = hint
+	m.layout() // size the editor before starting it
+	if m.started {
+		_ = m.editor.Start(m.prog)
+	}
+}
+
+// editorCommand returns the command (and exit hint) for editing path, preferring
+// nano and falling back to vi.
+func editorCommand(path string) (args []string, hint string) {
+	if p, err := exec.LookPath("nano"); err == nil {
+		return []string{p, path}, "Ctrl+X to exit"
+	}
+	if p, err := exec.LookPath("vi"); err == nil {
+		return []string{p, path}, ":q to exit"
+	}
+	return nil, ""
+}
+
+// editorDims returns the inner content size (width, height) of the floating
+// editor box, which uses almost the whole screen.
+func (m *Model) editorDims() (w, h int) {
+	boxW, boxH := m.width-4, m.height-2
+	if boxW < 10 {
+		boxW = m.width
+	}
+	if boxH < 6 {
+		boxH = m.height
+	}
+	// Box = border (2) on each axis + a title row inside.
+	return max(boxW-2, 1), max(boxH-3, 1)
 }
 
 // minWidthForSidebar is the minimum window width (in columns) below which the
@@ -323,6 +397,10 @@ func (m *Model) layout() {
 	for _, t := range m.terms {
 		t.SetSize(max(rightW, 1), max(m.termInnerH, 1))
 	}
+	if m.editor != nil {
+		ew, eh := m.editorDims()
+		m.editor.SetSize(ew, eh)
+	}
 	if m.picker != nil {
 		m.picker.SetSize(max(rightW, 1), max(m.claudeInnerH, 1))
 	}
@@ -332,6 +410,11 @@ func (m *Model) layout() {
 func (m *Model) View() string {
 	if m.width == 0 {
 		return "Starting code-tui…"
+	}
+
+	// The floating editor takes over the whole screen when open.
+	if m.editor != nil {
+		return m.editorView()
 	}
 
 	bodyH := m.height - 1

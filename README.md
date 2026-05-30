@@ -89,8 +89,11 @@ CLAUDE.
 The TERMINAL panel supports multiple tabs, shown next to its label (the active
 one is highlighted with the accent color). Each tab is an independent shell.
 
-In the explorer (when focused): `↑/↓` or `j/k` to move, `Enter`/`→` to expand or
-collapse folders, `←` to collapse.
+In the explorer (when focused): `↑/↓` or `j/k` to move, `→` to expand a folder,
+`←` to collapse. Press `Enter` on a folder to toggle it, or on a **file** to
+open it in a floating editor (almost full-screen) running `nano` — or `vi` if
+nano is not available. Close the editor with its own command (`Ctrl+X` in nano,
+`:q` in vi) to return to the UI.
 
 When a terminal panel is focused, every key press is sent to its process
 (including `Ctrl+C` to interrupt).
