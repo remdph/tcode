@@ -90,7 +90,9 @@ The TERMINAL panel supports multiple tabs, shown next to its label (the active
 one is highlighted with the accent color). Each tab is an independent shell.
 
 In the explorer (when focused): `↑/↓` or `j/k` to move, `→` to expand a folder,
-`←` to collapse. Press `Enter` on a folder to toggle it, or on a **file** to
+`←` to collapse, and `+` / `-` to resize the explorer (its width is remembered
+per project under `~/.config/code-tui/`). Press `Enter` on a folder to toggle
+it, or on a **file** to
 open it in a floating editor (almost full-screen) running `nano` — or `vi` if
 nano is not available. Close the editor with its own command (`Ctrl+X` in nano,
 `:q` in vi) to return to the UI.

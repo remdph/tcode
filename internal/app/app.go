@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
+	"code-tui/internal/config"
 	"code-tui/internal/picker"
 	"code-tui/internal/sessions"
 	"code-tui/internal/sidebar"
@@ -38,12 +39,13 @@ type Model struct {
 	nextTermID int
 	shell      string
 
-	focus       focus
-	sidebarPref bool // what the user wants (Ctrl+B)
-	showSidebar bool // effective visibility (pref + available width)
-	autoHidden  bool // hidden automatically because the window is too narrow
-	started     bool
-	prog        *tea.Program
+	focus        focus
+	sidebarPref  bool // what the user wants (Ctrl+B)
+	showSidebar  bool // effective visibility (pref + available width)
+	autoHidden   bool // hidden automatically because the window is too narrow
+	sidebarWidth int  // explorer width in columns (persisted per project)
+	started      bool
+	prog         *tea.Program
 
 	// picker is the session selector that occupies the CLAUDE panel until the
 	// user chooses; nil when there are no past sessions or one was already chosen.
@@ -71,15 +73,23 @@ func New(dir string) *Model {
 		shell = "/bin/bash"
 	}
 
+	// Per-project explorer width (persisted), falling back to the default.
+	sidebarWidth := config.Load(dir).SidebarWidth
+	if sidebarWidth == 0 {
+		sidebarWidth = defaultSidebarWidth
+	}
+	sidebarWidth = clamp(sidebarWidth, minSidebarWidth, maxSidebarWidth)
+
 	m := &Model{
-		dir:         dir,
-		shell:       shell,
-		sidebarPref: false, // the explorer starts hidden (toggle with Ctrl+B)
-		focus:       focusClaude,
-		sidebar:     sidebar.New(dir),
-		claude:      terminal.New(1, "CLAUDE", dir, claudeArgs(nil)),
-		terms:       []*terminal.Model{terminal.New(2, "TERMINAL", dir, []string{shell})},
-		nextTermID:  3,
+		dir:          dir,
+		shell:        shell,
+		sidebarPref:  false, // the explorer starts hidden (toggle with Ctrl+B)
+		sidebarWidth: sidebarWidth,
+		focus:        focusClaude,
+		sidebar:      sidebar.New(dir),
+		claude:       terminal.New(1, "CLAUDE", dir, claudeArgs(nil)),
+		terms:        []*terminal.Model{terminal.New(2, "TERMINAL", dir, []string{shell})},
+		nextTermID:   3,
 	}
 
 	// If there are past sessions in this directory, a selector is shown in the
@@ -193,6 +203,15 @@ func (m *Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Forward to the focused panel.
 	switch m.focus {
 	case focusSidebar:
+		// +/- resize the explorer (persisted per project).
+		switch k.String() {
+		case "+", "=":
+			m.resizeSidebar(+2)
+			return m, nil
+		case "-":
+			m.resizeSidebar(-2)
+			return m, nil
+		}
 		var cmd tea.Cmd
 		m.sidebar, cmd = m.sidebar.Update(k)
 		return m, cmd
@@ -352,6 +371,20 @@ func (m *Model) editorDims() (w, h int) {
 // explorer is hidden automatically to give the panels more room.
 const minWidthForSidebar = 80
 
+// Explorer width bounds and default (in columns).
+const (
+	defaultSidebarWidth = 24
+	minSidebarWidth     = 12
+	maxSidebarWidth     = 50
+)
+
+// resizeSidebar changes the explorer width by delta and persists it per project.
+func (m *Model) resizeSidebar(delta int) {
+	m.sidebarWidth = clamp(m.sidebarWidth+delta, minSidebarWidth, maxSidebarWidth)
+	m.layout()
+	_ = config.Save(m.dir, config.Project{SidebarWidth: m.sidebarWidth})
+}
+
 // layout computes the geometry of the panels and propagates it.
 func (m *Model) layout() {
 	if m.width <= 0 || m.height <= 0 {
@@ -376,7 +409,8 @@ func (m *Model) layout() {
 	// when the explorer is visible.
 	sbW, seamW := 0, 0
 	if m.showSidebar {
-		sbW = clamp(m.width/4, 20, 40)
+		// Use the persisted width, but never let it take more than half the window.
+		sbW = clamp(m.sidebarWidth, 8, m.width/2)
 		seamW = 1
 	}
 	rightW := m.width - sbW - seamW
