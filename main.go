@@ -21,10 +21,29 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+// version is the current release of code-tui (installed as `tcode`).
+const version = "0.1.0"
+
 func main() {
-	dir, err := resolveDir(os.Args[1:])
+	prog := filepath.Base(os.Args[0])
+	args := os.Args[1:]
+
+	if len(args) == 1 {
+		switch args[0] {
+		case "-v", "--version", "version":
+			fmt.Printf("%s %s\n", prog, version)
+			return
+		case "-h", "--help", "help":
+			fmt.Printf("Usage: %s [directory]\n\n"+
+				"Opens directory (or the current directory) as a project: a file\n"+
+				"explorer, claude-cli, terminals and a Git panel.\n", prog)
+			return
+		}
+	}
+
+	dir, err := resolveDir(args)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "code-tui:", err)
+		fmt.Fprintf(os.Stderr, "%s: %v\n", prog, err)
 		os.Exit(1)
 	}
 
@@ -36,7 +55,7 @@ func main() {
 	m.SetProgram(p)
 
 	if _, err := p.Run(); err != nil {
-		fmt.Fprintln(os.Stderr, "code-tui:", err)
+		fmt.Fprintf(os.Stderr, "%s: %v\n", prog, err)
 		os.Exit(1)
 	}
 }

@@ -1,7 +1,8 @@
 # code-tui
 
 A **VSCode-like environment for the terminal** (TUI), written in Go with
-[Bubble Tea](https://github.com/charmbracelet/bubbletea).
+[Bubble Tea](https://github.com/charmbracelet/bubbletea). Once installed it is
+invoked as **`tcode`**. Current version: **v0.1.0**.
 
 The interface skeleton:
 
@@ -54,18 +55,29 @@ directory (under `~/.claude/projects/<path>`):
 
   Navigate with `↑/↓` (or `j/k`) and confirm with `Enter`.
 
-## Usage
+## Install
+
+The installed binary is named **`tcode`**. To build and install it to
+`~/.local/bin` (make sure that is on your `PATH`):
+
+```bash
+go build -trimpath -ldflags="-s -w" -o ~/.local/bin/tcode .
+```
+
+Then invoke it from anywhere:
+
+```bash
+tcode            # opens the current directory as a project
+tcode /some/dir  # opens another directory
+tcode ~/repos/x  # ~ is expanded
+tcode --version  # prints the version (0.1.0)
+```
+
+During development you can also run it without installing:
 
 ```bash
 go run .            # opens the current directory
 go run . /some/dir  # opens another directory
-```
-
-Or build it:
-
-```bash
-go build -o code-tui .
-./code-tui
 ```
 
 > The CLAUDE panel requires `claude` (the Claude Code CLI) on your `PATH`.
