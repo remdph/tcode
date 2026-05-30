@@ -153,10 +153,9 @@ func (m *Model) layout() {
 	if m.width <= 0 || m.height <= 0 {
 		return
 	}
-	const statusH = 1
-	const titleH = 1   // rótulo encima de cada panel
-	const borderH = 2  // borde superior + inferior
-	const borderW = 2  // borde izquierdo + derecho
+	const statusH = 1 // barra de estado inferior
+	const headerH = 1 // fila de rótulos superior (EXPLORADOR / CLAUDE)
+	const sepH = 1    // separador horizontal entre CLAUDE y TERMINAL
 
 	// Visibilidad efectiva: lo que el usuario quiere, pero solo si la ventana es
 	// suficientemente ancha. Si no, se oculta automáticamente (responsive).
@@ -168,24 +167,26 @@ func (m *Model) layout() {
 
 	bodyH := m.height - statusH
 
-	sbOuterW := 0
+	// Sin bordes exteriores: solo se reserva 1 columna para la costura vertical
+	// (│) cuando el explorador está visible.
+	sbW, seamW := 0, 0
 	if m.showSidebar {
-		sbOuterW = clamp(m.width/4, 22, 40)
+		sbW = clamp(m.width/4, 20, 40)
+		seamW = 1
 	}
-	rightOuterW := m.width - sbOuterW
+	rightW := m.width - sbW - seamW
 
-	m.sbInnerW = sbOuterW - borderW
-	m.rightInnerW = rightOuterW - borderW
-	m.sbInnerH = bodyH - titleH - borderH
+	m.sbInnerW = sbW
+	m.rightInnerW = rightW
+	m.sbInnerH = bodyH - headerH
 
-	claudeOuterH := bodyH * 3 / 5
-	termOuterH := bodyH - claudeOuterH
-	m.claudeInnerH = claudeOuterH - titleH - borderH
-	m.termInnerH = termOuterH - titleH - borderH
+	rightContentH := bodyH - headerH - sepH
+	m.claudeInnerH = rightContentH * 3 / 5
+	m.termInnerH = rightContentH - m.claudeInnerH
 
-	m.sidebar.SetSize(max(m.sbInnerW, 1), max(m.sbInnerH, 1))
-	m.claude.SetSize(max(m.rightInnerW, 1), max(m.claudeInnerH, 1))
-	m.term.SetSize(max(m.rightInnerW, 1), max(m.termInnerH, 1))
+	m.sidebar.SetSize(max(sbW, 1), max(m.sbInnerH, 1))
+	m.claude.SetSize(max(rightW, 1), max(m.claudeInnerH, 1))
+	m.term.SetSize(max(rightW, 1), max(m.termInnerH, 1))
 }
 
 // View implementa tea.Model.
@@ -194,14 +195,22 @@ func (m *Model) View() string {
 		return "Iniciando code-tui…"
 	}
 
-	claudeBox := paneView(m.claude.View(), m.claude.Name(), m.focus == focusClaude, m.rightInnerW, m.claudeInnerH)
-	termBox := paneView(m.term.View(), m.term.Name(), m.focus == focusTerminal, m.rightInnerW, m.termInnerH)
-	right := lipgloss.JoinVertical(lipgloss.Left, claudeBox, termBox)
+	bodyH := m.height - 1
+
+	// Columna derecha: CLAUDE arriba, separador con rótulo, TERMINAL abajo.
+	rightHeader := headerLabel(m.claude.Name(), m.focus == focusClaude, m.rightInnerW)
+	claudeContent := blockRect(m.claude.View(), m.rightInnerW, m.claudeInnerH)
+	sep := horizSep(m.term.Name(), m.focus == focusTerminal, m.rightInnerW)
+	termContent := blockRect(m.term.View(), m.rightInnerW, m.termInnerH)
+	right := lipgloss.JoinVertical(lipgloss.Left, rightHeader, claudeContent, sep, termContent)
 
 	body := right
 	if m.showSidebar {
-		sb := paneView(m.sidebar.View(), "EXPLORADOR", m.focus == focusSidebar, m.sbInnerW, m.sbInnerH)
-		body = lipgloss.JoinHorizontal(lipgloss.Top, sb, right)
+		sbHeader := headerLabel("EXPLORADOR", m.focus == focusSidebar, m.sbInnerW)
+		sbContent := blockRect(m.sidebar.View(), m.sbInnerW, m.sbInnerH)
+		left := lipgloss.JoinVertical(lipgloss.Left, sbHeader, sbContent)
+		seam := seamColumn(bodyH, 1+m.claudeInnerH) // ├ en la fila del separador
+		body = lipgloss.JoinHorizontal(lipgloss.Top, left, seam, right)
 	}
 
 	return lipgloss.JoinVertical(lipgloss.Left, body, m.statusBar())
