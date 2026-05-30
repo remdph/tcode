@@ -1,5 +1,5 @@
-// Package sessions descubre las sesiones de Claude Code guardadas para un
-// directorio de trabajo concreto.
+// Package sessions discovers the Claude Code sessions saved for a given working
+// directory.
 package sessions
 
 import (
@@ -12,15 +12,15 @@ import (
 	"time"
 )
 
-// Session resume una sesión pasada de Claude Code.
+// Session describes a past Claude Code session.
 type Session struct {
-	ID      string    // identificador (nombre del .jsonl sin extensión)
-	Title   string    // primer mensaje del usuario, para mostrar
-	ModTime time.Time // última modificación del transcript
+	ID      string    // identifier (the .jsonl file name without extension)
+	Title   string    // first user message, for display
+	ModTime time.Time // last modification of the transcript
 }
 
-// encodeDir reproduce la codificación de Claude Code para la ruta del proyecto:
-// cada carácter no alfanumérico se sustituye por '-'.
+// encodeDir reproduces Claude Code's encoding of the project path: every
+// non-alphanumeric character is replaced with '-'.
 func encodeDir(dir string) string {
 	var b strings.Builder
 	for _, r := range dir {
@@ -34,7 +34,7 @@ func encodeDir(dir string) string {
 	return b.String()
 }
 
-// projectDir devuelve la carpeta de transcripts de Claude para dir.
+// projectDir returns Claude's transcript folder for dir.
 func projectDir(dir string) string {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -43,8 +43,8 @@ func projectDir(dir string) string {
 	return filepath.Join(home, ".claude", "projects", encodeDir(dir))
 }
 
-// List devuelve las sesiones de dir ordenadas de la más reciente a la más
-// antigua. Devuelve nil si no hay ninguna.
+// List returns the sessions for dir, ordered from most to least recent. It
+// returns nil when there are none.
 func List(dir string) []Session {
 	proj := projectDir(dir)
 	if proj == "" {
@@ -70,7 +70,7 @@ func List(dir string) []Session {
 			Title:   firstUserMessage(filepath.Join(proj, e.Name())),
 		}
 		if s.Title == "" {
-			s.Title = "(sesión sin título)"
+			s.Title = "(untitled session)"
 		}
 		out = append(out, s)
 	}
@@ -81,7 +81,7 @@ func List(dir string) []Session {
 	return out
 }
 
-// record es la forma mínima de una línea del transcript que nos interesa.
+// record is the minimal shape of a transcript line that we care about.
 type record struct {
 	Type    string `json:"type"`
 	Message struct {
@@ -89,8 +89,8 @@ type record struct {
 	} `json:"message"`
 }
 
-// firstUserMessage extrae el primer mensaje real del usuario del transcript,
-// saltando entradas de metadatos o de sistema.
+// firstUserMessage extracts the first real user message from the transcript,
+// skipping metadata or system entries.
 func firstUserMessage(path string) string {
 	f, err := os.Open(path)
 	if err != nil {
@@ -99,7 +99,7 @@ func firstUserMessage(path string) string {
 	defer f.Close()
 
 	sc := bufio.NewScanner(f)
-	// Las líneas del transcript pueden ser grandes (resultados de herramientas).
+	// Transcript lines can be large (tool results), so grow the buffer.
 	sc.Buffer(make([]byte, 0, 64*1024), 16*1024*1024)
 
 	for sc.Scan() {
@@ -116,8 +116,8 @@ func firstUserMessage(path string) string {
 	return ""
 }
 
-// extractText obtiene el texto del campo content, que puede ser un string o un
-// array de bloques { "type": "text", "text": ... }.
+// extractText pulls the text out of the content field, which may be a string or
+// an array of { "type": "text", "text": ... } blocks.
 func extractText(raw json.RawMessage) string {
 	if len(raw) == 0 {
 		return ""
@@ -140,7 +140,7 @@ func extractText(raw json.RawMessage) string {
 	return ""
 }
 
-// clean normaliza el título a una sola línea legible.
+// clean normalizes the title to a single readable line.
 func clean(s string) string {
 	s = strings.ReplaceAll(s, "\r", " ")
 	s = strings.ReplaceAll(s, "\n", " ")

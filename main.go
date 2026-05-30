@@ -1,5 +1,5 @@
-// Command code-tui es un entorno tipo VSCode para la terminal: un explorador de
-// archivos a la izquierda, claude-cli a la derecha y una terminal abajo.
+// Command code-tui is a VSCode-like environment for the terminal: a file
+// explorer on the left, claude-cli on the right and a terminal below.
 package main
 
 import (

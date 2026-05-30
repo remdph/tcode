@@ -4,12 +4,12 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// encodeKey convierte una pulsación de Bubble Tea en la secuencia de bytes que
-// un proceso de terminal espera recibir por stdin.
+// encodeKey converts a Bubble Tea key press into the byte sequence a terminal
+// process expects to receive on stdin.
 func encodeKey(k tea.KeyMsg) []byte {
 	var prefix []byte
 	if k.Alt {
-		prefix = []byte{0x1b} // ESC como prefijo de Meta/Alt
+		prefix = []byte{0x1b} // ESC as the Meta/Alt prefix
 	}
 
 	switch k.Type {
@@ -44,8 +44,8 @@ func encodeKey(k tea.KeyMsg) []byte {
 	case tea.KeyDelete:
 		return append(prefix, 0x1b, '[', '3', '~')
 	default:
-		// Las teclas de control (Ctrl+A..Ctrl+Z, etc.) tienen un KeyType cuyo
-		// valor coincide con el código ASCII de control correspondiente.
+		// Control keys (Ctrl+A..Ctrl+Z, etc.) have a KeyType whose value matches
+		// the corresponding ASCII control code.
 		if k.Type >= 0 && int(k.Type) <= 31 {
 			return append(prefix, byte(k.Type))
 		}

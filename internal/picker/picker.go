@@ -1,5 +1,5 @@
-// Package picker implementa el selector de sesión que se muestra en el panel
-// CLAUDE antes de lanzar claude-cli.
+// Package picker implements the session selector shown in the CLAUDE panel
+// before launching claude-cli.
 package picker
 
 import (
@@ -9,15 +9,15 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// Item es una opción del selector.
+// Item is an option in the selector.
 type Item struct {
-	ID       string // ID de sesión a reanudar (vacío si IsNew)
-	Title    string // texto principal
-	Subtitle string // texto secundario (p. ej. la fecha)
-	IsNew    bool   // true en la opción "Nueva sesión"
+	ID       string // session ID to resume (empty when IsNew)
+	Title    string // primary text
+	Subtitle string // secondary text (e.g. the date)
+	IsNew    bool   // true for the "New session" option
 }
 
-// Model es el estado del selector.
+// Model is the selector state.
 type Model struct {
 	items         []Item
 	cursor        int
@@ -35,19 +35,19 @@ var (
 	selSubStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("153"))
 )
 
-// New crea el selector con las opciones dadas (la primera debería ser la de
-// "Nueva sesión").
+// New creates the selector with the given options (the first one should be the
+// "New session" option).
 func New(items []Item) Model {
 	return Model{items: items, width: 40, height: 10}
 }
 
-// SetSize fija el área disponible.
+// SetSize sets the available area.
 func (m *Model) SetSize(w, h int) {
 	m.width, m.height = w, h
 }
 
-// Update procesa la navegación. Devuelve el ítem elegido cuando el usuario
-// confirma con Enter (nil en caso contrario).
+// Update handles navigation. It returns the chosen item when the user confirms
+// with Enter (nil otherwise).
 func (m Model) Update(k tea.KeyMsg) (Model, *Item) {
 	switch k.String() {
 	case "up", "k", "ctrl+p":
@@ -89,13 +89,13 @@ func (m *Model) ensureVisible() {
 	}
 }
 
-// rowsPerItem: cada ítem ocupa 2 filas (título + subtítulo) salvo el "nuevo".
+// rowsPerItem: each item takes 2 rows (title + subtitle).
 func (m Model) rowsPerItem() int { return 2 }
 
-// View renderiza el selector.
+// View renders the selector.
 func (m Model) View() string {
 	var b strings.Builder
-	header := "Sesiones de Claude en este directorio — ↑/↓ y Enter:"
+	header := "Claude sessions in this directory — ↑/↓ and Enter:"
 	b.WriteString(truncate(headerStyle.Render(header), m.width))
 	b.WriteString("\n\n")
 
@@ -118,10 +118,10 @@ func (m Model) View() string {
 			bar = selBarStyle.Render("▎ ")
 		}
 
-		// Línea principal (se recorta el texto plano antes de aplicar estilo).
+		// Primary line (the plain text is truncated before styling).
 		mainText := it.Title
 		if it.IsNew {
-			mainText = "＋ Nueva sesión"
+			mainText = "＋ New session"
 		}
 		mainText = truncate(mainText, m.width-2)
 		var main string
@@ -135,7 +135,7 @@ func (m Model) View() string {
 		}
 		b.WriteString(bar + main + "\n")
 
-		// Línea secundaria (fecha / id).
+		// Secondary line (date / id).
 		if !it.IsNew {
 			subText := truncate(it.Subtitle, m.width-2)
 			if selected {
@@ -150,7 +150,7 @@ func (m Model) View() string {
 	return b.String()
 }
 
-// truncate recorta texto plano (sin estilos) a un ancho visible máximo.
+// truncate trims plain (unstyled) text to a maximum visible width.
 func truncate(s string, w int) string {
 	if w <= 0 {
 		return ""

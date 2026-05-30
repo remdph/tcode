@@ -1,5 +1,5 @@
-// Package sidebar implementa el explorador de archivos lateral: un árbol
-// navegable con carpetas plegables.
+// Package sidebar implements the side file explorer: a navigable tree with
+// collapsible folders.
 package sidebar
 
 import (
@@ -22,7 +22,7 @@ type node struct {
 	children []*node
 }
 
-// Model es el estado del explorador.
+// Model is the explorer state.
 type Model struct {
 	root          *node
 	flat          []*node
@@ -37,7 +37,7 @@ var (
 	selectedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("231")).Background(lipgloss.Color("24"))
 )
 
-// New crea el explorador apuntando a dir.
+// New creates the explorer pointing at dir.
 func New(dir string) Model {
 	root := &node{name: filepath.Base(dir), path: dir, isDir: true, expanded: true}
 	m := Model{root: root, width: 28, height: 20}
@@ -46,7 +46,7 @@ func New(dir string) Model {
 	return m
 }
 
-// loadChildren lee las entradas del directorio del nodo (carpetas primero).
+// loadChildren reads the node's directory entries (folders first).
 func loadChildren(n *node) {
 	n.loaded = true
 	entries, err := os.ReadDir(n.path)
@@ -64,7 +64,7 @@ func loadChildren(n *node) {
 	for _, e := range entries {
 		name := e.Name()
 		if strings.HasPrefix(name, ".") && name != ".." {
-			// Ocultar dotfiles por defecto (como VSCode con files.exclude).
+			// Hide dotfiles by default (like VSCode's files.exclude).
 			continue
 		}
 		n.children = append(n.children, &node{
@@ -76,7 +76,7 @@ func loadChildren(n *node) {
 	}
 }
 
-// rebuild recompone la lista plana de nodos visibles.
+// rebuild recomputes the flat list of visible nodes.
 func (m *Model) rebuild() {
 	m.flat = m.flat[:0]
 	var walk func(n *node)
@@ -97,12 +97,12 @@ func (m *Model) rebuild() {
 	}
 }
 
-// SetSize fija el tamaño interior disponible (en celdas).
+// SetSize sets the available inner size (in cells).
 func (m *Model) SetSize(w, h int) {
 	m.width, m.height = w, h
 }
 
-// Update procesa la navegación cuando el explorador tiene el foco.
+// Update handles navigation when the explorer is focused.
 func (m Model) Update(k tea.KeyMsg) (Model, tea.Cmd) {
 	switch k.String() {
 	case "up", "k":
@@ -159,10 +159,10 @@ func (m *Model) ensureVisible() {
 	}
 }
 
-// View renderiza el árbol dentro del área asignada.
+// View renders the tree within the assigned area.
 func (m Model) View() string {
 	if len(m.flat) == 0 {
-		return fileStyle.Render("(vacío)")
+		return fileStyle.Render("(empty)")
 	}
 	var lines []string
 	end := m.offset + m.height

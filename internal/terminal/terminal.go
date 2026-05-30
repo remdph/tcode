@@ -1,6 +1,6 @@
-// Package terminal implementa un panel respaldado por un pseudo-terminal (PTY)
-// y un emulador de terminal virtual. Se usa para incrustar procesos
-// interactivos (claude-cli, una shell) dentro de la TUI.
+// Package terminal implements a panel backed by a pseudo-terminal (PTY) and a
+// virtual terminal emulator. It is used to embed interactive processes
+// (claude-cli, a shell) inside the TUI.
 package terminal
 
 import (
@@ -13,17 +13,17 @@ import (
 	"github.com/creack/pty"
 )
 
-// RefreshMsg se emite cuando el PTY produjo nueva salida y el panel debe
-// repintarse.
+// RefreshMsg is emitted when the PTY produced new output and the panel must be
+// repainted.
 type RefreshMsg struct{ ID int }
 
-// ExitMsg se emite cuando el proceso del PTY terminó.
+// ExitMsg is emitted when the PTY process exits.
 type ExitMsg struct {
 	ID  int
 	Err error
 }
 
-// Model es un panel de terminal incrustado.
+// Model is an embedded terminal panel.
 type Model struct {
 	id   int
 	name string
@@ -41,8 +41,8 @@ type Model struct {
 	dead          bool
 }
 
-// New crea un panel de terminal que ejecutará args[0] con args[1:] en dir.
-// El proceso no se lanza hasta llamar a Start.
+// New creates a terminal panel that will run args[0] with args[1:] in dir.
+// The process is not launched until Start is called.
 func New(id int, name, dir string, args []string) *Model {
 	return &Model{
 		id:     id,
@@ -54,21 +54,20 @@ func New(id int, name, dir string, args []string) *Model {
 	}
 }
 
-// Name devuelve el rótulo del panel.
+// Name returns the panel label.
 func (m *Model) Name() string { return m.name }
 
-// SetArgs fija el comando a ejecutar. Solo tiene efecto si se llama antes de
-// Start.
+// SetArgs sets the command to run. It only has effect if called before Start.
 func (m *Model) SetArgs(args []string) { m.args = args }
 
-// Started indica si el proceso ya se lanzó.
+// Started reports whether the process has already been launched.
 func (m *Model) Started() bool { return m.started }
 
-// Dead indica si el proceso subyacente terminó.
+// Dead reports whether the underlying process has exited.
 func (m *Model) Dead() bool { return m.dead }
 
-// Start lanza el proceso en un PTY con el tamaño actual y arranca el bucle de
-// lectura. prog se usa para notificar al programa de Bubble Tea.
+// Start launches the process in a PTY at the current size and starts the read
+// loop. prog is used to notify the Bubble Tea program.
 func (m *Model) Start(prog *tea.Program) error {
 	m.prog = prog
 	m.mu.Lock()
@@ -93,7 +92,7 @@ func (m *Model) Start(prog *tea.Program) error {
 	return nil
 }
 
-// readLoop copia la salida del PTY al emulador y avisa al programa.
+// readLoop copies PTY output into the emulator and notifies the program.
 func (m *Model) readLoop() {
 	buf := make([]byte, 32*1024)
 	for {
@@ -114,11 +113,11 @@ func (m *Model) readLoop() {
 	}
 }
 
-// responseLoop drena las respuestas que el emulador genera ante las consultas
-// del proceso (posición del cursor, atributos del dispositivo, etc.) y las
-// devuelve al PTY. Es imprescindible: el emulador escribe esas respuestas en un
-// io.Pipe síncrono, así que sin un lector concurrente su Write se bloquea y
-// congela toda la terminal.
+// responseLoop drains the replies the emulator generates for the process's
+// terminal queries (cursor position, device attributes, etc.) and writes them
+// back to the PTY. This is essential: the emulator writes those replies to a
+// synchronous io.Pipe, so without a concurrent reader its Write blocks and
+// freezes the whole terminal.
 func (m *Model) responseLoop() {
 	buf := make([]byte, 4096)
 	for {
@@ -132,8 +131,8 @@ func (m *Model) responseLoop() {
 	}
 }
 
-// SetSize ajusta el tamaño del panel (en celdas), redimensionando emulador y
-// PTY en vivo.
+// SetSize adjusts the panel size (in cells), resizing the emulator and PTY
+// live.
 func (m *Model) SetSize(w, h int) {
 	if w < 1 {
 		w = 1
@@ -157,7 +156,7 @@ func (m *Model) SetSize(w, h int) {
 	}
 }
 
-// SendKey traduce una pulsación de Bubble Tea a bytes y la envía al PTY.
+// SendKey translates a Bubble Tea key press to bytes and sends it to the PTY.
 func (m *Model) SendKey(k tea.KeyMsg) {
 	if m.ptmx == nil {
 		return
@@ -167,7 +166,7 @@ func (m *Model) SendKey(k tea.KeyMsg) {
 	}
 }
 
-// View renderiza la pantalla del emulador como string con estilos ANSI.
+// View renders the emulator screen as a string with ANSI styling.
 func (m *Model) View() string {
 	if m.emu == nil {
 		return ""
@@ -175,7 +174,7 @@ func (m *Model) View() string {
 	return m.emu.Render()
 }
 
-// Close termina el proceso y cierra el PTY.
+// Close terminates the process and closes the PTY.
 func (m *Model) Close() {
 	if m.ptmx != nil {
 		_ = m.ptmx.Close()

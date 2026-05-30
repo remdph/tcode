@@ -7,13 +7,13 @@ import (
 )
 
 var (
-	focusedColor = lipgloss.Color("39")  // azul brillante
-	dimColor     = lipgloss.Color("240") // gris (costuras)
+	focusedColor = lipgloss.Color("39")  // bright blue
+	dimColor     = lipgloss.Color("240") // gray (seams)
 	titleColor   = lipgloss.Color("245")
 )
 
-// headerLabel dibuja la fila de rótulo de un panel (sin recuadro), ocupando
-// todo el ancho. Cuando el panel tiene el foco se resalta en azul.
+// headerLabel draws a panel's label row (no box), spanning the full width.
+// When the panel is focused it is highlighted in blue.
 func headerLabel(label string, focused bool, w int) string {
 	if w < 1 {
 		w = 1
@@ -31,28 +31,8 @@ func headerLabel(label string, focused bool, w int) string {
 	return st.Render(" " + label)
 }
 
-// horizSep dibuja el separador horizontal entre CLAUDE y TERMINAL, con el
-// rótulo del panel inferior embebido (── TERMINAL ─────). Se resalta si el
-// panel inferior tiene el foco.
-func horizSep(label string, focused bool, w int) string {
-	if w < 1 {
-		w = 1
-	}
-	text := []rune("─ " + label + " ")
-	if len(text) < w {
-		text = append(text, []rune(strings.Repeat("─", w-len(text)))...)
-	} else {
-		text = text[:w]
-	}
-	st := lipgloss.NewStyle().Foreground(dimColor)
-	if focused {
-		st = st.Foreground(focusedColor).Bold(true)
-	}
-	return st.Render(string(text))
-}
-
-// seamColumn dibuja la costura vertical (│) de altura h entre el explorador y
-// la columna derecha, con una ├ en la fila del separador horizontal.
+// seamColumn draws the vertical seam (│) of height h between the explorer and
+// the right column, with a ├ on the TERMINAL header row.
 func seamColumn(h, sepRow int) string {
 	lines := make([]string, h)
 	for i := range lines {
@@ -65,8 +45,8 @@ func seamColumn(h, sepRow int) string {
 	return lipgloss.NewStyle().Foreground(dimColor).Render(strings.Join(lines, "\n"))
 }
 
-// blockRect normaliza el contenido a un rectángulo exacto de w×h celdas,
-// rellenando con espacios y recortando lo que sobre.
+// blockRect normalizes content into an exact w×h rectangle, padding with
+// spaces and trimming any overflow.
 func blockRect(content string, w, h int) string {
 	if w < 1 {
 		w = 1
@@ -82,12 +62,12 @@ func blockRect(content string, w, h int) string {
 		Render(content)
 }
 
-// statusBar dibuja la barra inferior con el foco actual y los atajos.
+// statusBar draws the bottom bar with the current focus and the shortcuts.
 func (m *Model) statusBar() string {
 	var focusName string
 	switch m.focus {
 	case focusSidebar:
-		focusName = "EXPLORADOR"
+		focusName = "EXPLORER"
 	case focusClaude:
 		focusName = "CLAUDE"
 	case focusTerminal:
@@ -101,9 +81,9 @@ func (m *Model) statusBar() string {
 		Padding(0, 1).
 		Render(focusName)
 
-	hints := " Ctrl+B explorador · Alt+1/2/3 foco · Ctrl+Q salir"
+	hints := " Ctrl+B explorer · Alt+1 Claude · Alt+2 terminal · Ctrl+Q quit"
 	if m.autoHidden {
-		hints = " explorador oculto · Alt+2/3 foco · Ctrl+Q salir"
+		hints = " explorer hidden (window too narrow) · Alt+1/2 focus · Ctrl+Q quit"
 	}
 	rest := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("250")).
@@ -112,7 +92,7 @@ func (m *Model) statusBar() string {
 
 	bar := lipgloss.JoinHorizontal(lipgloss.Left, seg, rest)
 	return lipgloss.NewStyle().
-		Inline(true). // una sola línea: trunca en vez de envolver
+		Inline(true). // single line: truncate instead of wrapping
 		Width(m.width).
 		MaxWidth(m.width).
 		Background(lipgloss.Color("236")).

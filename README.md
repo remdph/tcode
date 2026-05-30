@@ -1,95 +1,113 @@
 # code-tui
 
-Un entorno tipo **VSCode para la terminal** (TUI), escrito en Go con
+A **VSCode-like environment for the terminal** (TUI), written in Go with
 [Bubble Tea](https://github.com/charmbracelet/bubbletea).
 
-La primera versión monta el esqueleto de la interfaz:
+The interface skeleton:
 
 ```
-┌──────────────┬───────────────────────────────────┐
-│              │  CLAUDE                           │
-│  EXPLORADOR  │  (claude-cli en una terminal      │
-│  (árbol de   │   virtual / PTY)                  │
-│   archivos)  ├───────────────────────────────────┤
-│              │  TERMINAL                         │
-│              │  (tu shell en una terminal        │
-│              │   virtual / PTY)                  │
-└──────────────┴───────────────────────────────────┘
- CLAUDE   Ctrl+B explorador · Alt+1/2/3 foco · Ctrl+Q salir
+┌───────────────────────────────────────────────────┐
+│  CLAUDE                                           │
+│  (claude-cli in a virtual terminal / PTY)         │
+├───────────────────────────────────────────────────┤
+│  TERMINAL                                         │
+│  (your shell in a virtual terminal / PTY)         │
+└───────────────────────────────────────────────────┘
+ CLAUDE   Ctrl+B explorer · Alt+1 Claude · Alt+2 terminal · Ctrl+Q quit
 ```
 
-- **Panel izquierdo** — explorador de archivos navegable del directorio actual.
-- **Panel derecho (arriba)** — `claude-cli` corriendo en una terminal virtual.
-- **Panel derecho (abajo)** — una shell interactiva en otra terminal virtual.
+The file explorer is hidden by default; press `Ctrl+B` to reveal it on the left:
 
-Los dos paneles de la derecha son **terminales virtuales reales**: cada uno
-ejecuta su proceso en un PTY y se renderiza mediante un emulador de terminal
-([`charmbracelet/x/vt`](https://github.com/charmbracelet/x)). Ambos arrancan en
-el mismo directorio de trabajo.
+```
+┌──────────────┬────────────────────────────────────┐
+│              │  CLAUDE                            │
+│  EXPLORER    │  (claude-cli)                      │
+│  (file tree) ├────────────────────────────────────┤
+│              │  TERMINAL  (your shell)            │
+└──────────────┴────────────────────────────────────┘
+```
 
-### Sesiones de Claude
+- **Left panel** — a navigable file explorer of the current directory.
+- **Right panel (top)** — `claude-cli` running in a virtual terminal.
+- **Right panel (bottom)** — an interactive shell in another virtual terminal.
 
-claude-cli se lanza siempre con `claude --dangerously-skip-permissions`. Al
-abrir el panel CLAUDE, code-tui busca **sesiones pasadas** de Claude Code en ese
-directorio (en `~/.claude/projects/<ruta>`):
+The two right-hand panels are **real virtual terminals**: each runs its process
+in a PTY and is rendered through a terminal emulator
+([`charmbracelet/x/vt`](https://github.com/charmbracelet/x)). Both start in the
+same working directory.
 
-- Si **no hay** ninguna, arranca directamente una sesión nueva.
-- Si **las hay**, muestra un selector en el panel CLAUDE. La **primera opción es
-  siempre crear una sesión nueva**; debajo se listan las sesiones existentes
-  (primer mensaje + fecha), de la más reciente a la más antigua. Reanudar una
-  sesión usa `claude --dangerously-skip-permissions --resume <id>`.
+There are no outer borders: content reaches the window edges and only the
+internal seams are drawn (a vertical `│` between the explorer and the right
+column, and the `TERMINAL` header between the two right panels).
 
-  Navega con `↑/↓` (o `j/k`) y confirma con `Enter`.
+### Claude sessions
 
-## Uso
+claude-cli always launches with `claude --dangerously-skip-permissions`. When
+the CLAUDE panel opens, code-tui looks for **past Claude Code sessions** for that
+directory (under `~/.claude/projects/<path>`):
+
+- If there are **none**, it starts a new session directly.
+- If there **are**, it shows a selector in the CLAUDE panel. The **first option
+  is always to create a new session**; below it the existing sessions are listed
+  (first message + date), from most to least recent. Resuming a session uses
+  `claude --dangerously-skip-permissions --resume <id>`.
+
+  Navigate with `↑/↓` (or `j/k`) and confirm with `Enter`.
+
+## Usage
 
 ```bash
-go run .            # abre el directorio actual
-go run . /ruta/dir  # abre otro directorio
+go run .            # opens the current directory
+go run . /some/dir  # opens another directory
 ```
 
-O compilando:
+Or build it:
 
 ```bash
 go build -o code-tui .
 ./code-tui
 ```
 
-> Requiere tener `claude` (Claude Code CLI) en el `PATH` para el panel CLAUDE.
+> The CLAUDE panel requires `claude` (the Claude Code CLI) on your `PATH`.
 
-## Atajos
+## Shortcuts
 
-| Tecla            | Acción                                            |
-|------------------|---------------------------------------------------|
-| `Ctrl+B`         | Mostrar / ocultar el explorador lateral           |
-| `Alt+1`          | Enfocar el explorador                             |
-| `Alt+2`          | Enfocar el panel CLAUDE                           |
-| `Alt+3`          | Enfocar el panel TERMINAL                         |
-| `Ctrl+Q`         | Salir                                             |
+| Key       | Action                                  |
+|-----------|-----------------------------------------|
+| `Ctrl+B`  | Show / hide the side explorer           |
+| `Alt+1`   | Focus the CLAUDE panel                  |
+| `Alt+2`   | Focus the TERMINAL panel                |
+| `Alt+3`   | Focus the explorer (when visible)       |
+| `Ctrl+Q`  | Quit                                    |
 
-En el explorador (cuando tiene el foco): `↑/↓` o `j/k` para moverse,
-`Enter`/`→` para expandir o plegar carpetas, `←` para plegar.
+In the explorer (when focused): `↑/↓` or `j/k` to move, `Enter`/`→` to expand or
+collapse folders, `←` to collapse.
 
-Cuando un panel de terminal tiene el foco, todas las pulsaciones se envían a su
-proceso (incluido `Ctrl+C` para interrumpir).
+When a terminal panel is focused, every key press is sent to its process
+(including `Ctrl+C` to interrupt).
 
-> **Nota sobre `Super+B`:** la mayoría de emuladores de terminal no reenvían la
-> tecla *Super* (Win/Cmd) a las aplicaciones, así que el atajo fiable para el
-> explorador es **`Ctrl+B`**. `Super+B` se reconoce si tu terminal llega a
-> enviarlo (protocolo de teclado Kitty), pero no está garantizado.
+The explorer hides itself automatically when the window is narrower than 80
+columns, and comes back when it is widened again (unless you hid it manually).
 
-## Estructura
+> **About `Super+B`:** most terminal emulators do not forward the *Super*
+> (Win/Cmd) key to applications, so the reliable shortcut for the explorer is
+> **`Ctrl+B`**. `Super+B` is recognized if your terminal happens to send it (the
+> Kitty keyboard protocol), but it is not guaranteed.
+
+## Layout
 
 ```
-main.go                      Punto de entrada
-internal/app/                Modelo raíz: layout, foco y atajos
-internal/sidebar/            Explorador de archivos (árbol)
-internal/terminal/           Panel de terminal respaldado por PTY + emulador vt
+main.go             Entry point
+internal/app/       Root model: layout, focus and shortcuts
+internal/sidebar/   File explorer (tree)
+internal/terminal/  PTY-backed terminal panel + vt emulator
+internal/sessions/  Discovery of past Claude Code sessions
+internal/picker/    Session selector UI
 ```
 
-## Estado
+## Status
 
-Esto es el primer hito: layout + explorador + dos terminales virtuales. Todavía
-**no** hay editor de texto (vendrá después). Próximos pasos posibles: cursor
-visible en los paneles de terminal, scroll con rueda del ratón, click para
-enfocar, paleta de comandos y, más adelante, el editor.
+This is an early milestone: layout + explorer + two virtual terminals + the
+Claude session picker. There is **no** text editor yet (that comes later).
+Possible next steps: a visible cursor in the terminal panels, mouse-wheel
+scrolling, click to focus, a command palette and, later on, the editor.

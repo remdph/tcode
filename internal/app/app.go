@@ -1,5 +1,5 @@
-// Package app contiene el modelo raíz de la TUI: compone el explorador lateral,
-// el panel de claude-cli y el panel de terminal, y gestiona layout y foco.
+// Package app holds the root model of the TUI: it composes the side explorer,
+// the claude-cli panel and the terminal panel, and manages layout and focus.
 package app
 
 import (
@@ -22,7 +22,7 @@ const (
 	focusTerminal
 )
 
-// Model es el modelo raíz de Bubble Tea.
+// Model is the root Bubble Tea model.
 type Model struct {
 	dir           string
 	width, height int
@@ -32,25 +32,25 @@ type Model struct {
 	term    *terminal.Model
 
 	focus       focus
-	sidebarPref bool // lo que el usuario quiere (Ctrl+B)
-	showSidebar bool // visibilidad efectiva (pref + ancho disponible)
-	autoHidden  bool // oculto automáticamente por ancho insuficiente
+	sidebarPref bool // what the user wants (Ctrl+B)
+	showSidebar bool // effective visibility (pref + available width)
+	autoHidden  bool // hidden automatically because the window is too narrow
 	started     bool
 	prog        *tea.Program
 
-	// picker es el selector de sesión que ocupa el panel CLAUDE hasta que el
-	// usuario elige; nil si no hay sesiones pasadas o ya se eligió.
+	// picker is the session selector that occupies the CLAUDE panel until the
+	// user chooses; nil when there are no past sessions or one was already chosen.
 	picker *picker.Model
 
-	// Geometría calculada por layout().
+	// Geometry computed by layout().
 	sbInnerW                 int
 	rightInnerW              int
 	sbInnerH                 int
 	claudeInnerH, termInnerH int
 }
 
-// New construye el modelo raíz apuntando a dir. Los procesos de los terminales
-// no se lanzan hasta recibir el primer tamaño de ventana.
+// New builds the root model pointing at dir. The terminal processes are not
+// launched until the first window size is received.
 func New(dir string) *Model {
 	shell := os.Getenv("SHELL")
 	if shell == "" {
@@ -59,18 +59,17 @@ func New(dir string) *Model {
 
 	m := &Model{
 		dir:         dir,
-		sidebarPref: true,
-		showSidebar: true,
+		sidebarPref: false, // the explorer starts hidden (toggle with Ctrl+B)
 		focus:       focusClaude,
 		sidebar:     sidebar.New(dir),
 		claude:      terminal.New(1, "CLAUDE", dir, claudeArgs(nil)),
 		term:        terminal.New(2, "TERMINAL", dir, []string{shell}),
 	}
 
-	// Si hay sesiones pasadas en este directorio, se muestra un selector en el
-	// panel CLAUDE; la primera opción siempre es crear una sesión nueva.
+	// If there are past sessions in this directory, a selector is shown in the
+	// CLAUDE panel; the first option is always to create a new session.
 	if past := sessions.List(dir); len(past) > 0 {
-		items := []picker.Item{{Title: "Nueva sesión", IsNew: true}}
+		items := []picker.Item{{Title: "New session", IsNew: true}}
 		for _, s := range past {
 			items = append(items, picker.Item{
 				ID:       s.ID,
@@ -84,8 +83,8 @@ func New(dir string) *Model {
 	return m
 }
 
-// claudeArgs construye el comando de claude. Siempre se lanza con
-// --dangerously-skip-permissions; si resumeID no es vacío, se reanuda esa sesión.
+// claudeArgs builds the claude command. It always launches with
+// --dangerously-skip-permissions; if resumeID is non-empty, that session is resumed.
 func claudeArgs(resumeID *string) []string {
 	args := []string{"claude", "--dangerously-skip-permissions"}
 	if resumeID != nil && *resumeID != "" {
@@ -101,13 +100,12 @@ func shortID(id string) string {
 	return id
 }
 
-// SetProgram guarda la referencia al programa para que los terminales puedan
-// notificar nueva salida.
+// SetProgram stores the program reference so the terminals can notify new output.
 func (m *Model) SetProgram(p *tea.Program) { m.prog = p }
 
 func (m *Model) Init() tea.Cmd { return nil }
 
-// Update implementa tea.Model.
+// Update implements tea.Model.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -123,14 +121,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleKey(msg)
 
 	case terminal.RefreshMsg, terminal.ExitMsg:
-		// Basta con repintar; Bubble Tea llama a View tras cada Update.
+		// A repaint is enough; Bubble Tea calls View after every Update.
 		return m, nil
 	}
 	return m, nil
 }
 
 func (m *Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// Atajos globales (interceptados antes de reenviar al panel con foco).
+	// Global shortcuts (intercepted before forwarding to the focused panel).
 	switch {
 	case k.Type == tea.KeyCtrlQ:
 		m.cleanup()
@@ -139,26 +137,26 @@ func (m *Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.toggleSidebar()
 		return m, nil
 	case k.Alt && runeIs(k, '1'):
+		m.focus = focusClaude
+		return m, nil
+	case k.Alt && runeIs(k, '2'):
+		m.focus = focusTerminal
+		return m, nil
+	case k.Alt && runeIs(k, '3'):
 		if m.showSidebar {
 			m.focus = focusSidebar
 		}
 		return m, nil
-	case k.Alt && runeIs(k, '2'):
-		m.focus = focusClaude
-		return m, nil
-	case k.Alt && runeIs(k, '3'):
-		m.focus = focusTerminal
-		return m, nil
 	}
 
-	// Reenvío al panel con foco.
+	// Forward to the focused panel.
 	switch m.focus {
 	case focusSidebar:
 		var cmd tea.Cmd
 		m.sidebar, cmd = m.sidebar.Update(k)
 		return m, cmd
 	case focusClaude:
-		// Mientras el selector de sesión esté activo, las teclas van a él.
+		// While the session picker is active, keys go to it.
 		if m.picker != nil {
 			updated, chosen := m.picker.Update(k)
 			*m.picker = updated
@@ -186,17 +184,23 @@ func runeIs(k tea.KeyMsg, r rune) bool {
 func (m *Model) toggleSidebar() {
 	m.sidebarPref = !m.sidebarPref
 	m.layout()
+	// Showing the explorer focuses it; hiding it returns focus to CLAUDE.
+	if m.showSidebar {
+		m.focus = focusSidebar
+	} else if m.focus == focusSidebar {
+		m.focus = focusClaude
+	}
 }
 
 func (m *Model) startTerminals() {
 	_ = m.term.Start(m.prog)
-	// La shell siempre arranca; claude solo si no hay selector pendiente.
+	// The shell always starts; claude only if there is no pending selector.
 	if m.picker == nil {
 		m.startClaude(nil)
 	}
 }
 
-// startClaude lanza claude-cli (nueva sesión o reanudando resumeID).
+// startClaude launches claude-cli (new session, or resuming resumeID).
 func (m *Model) startClaude(resumeID *string) {
 	if m.claude.Started() {
 		return
@@ -210,21 +214,21 @@ func (m *Model) cleanup() {
 	m.term.Close()
 }
 
-// minWidthForSidebar es el ancho mínimo de ventana (en columnas) por debajo del
-// cual el explorador se oculta automáticamente para dar espacio a los paneles.
+// minWidthForSidebar is the minimum window width (in columns) below which the
+// explorer is hidden automatically to give the panels more room.
 const minWidthForSidebar = 80
 
-// layout calcula la geometría de los paneles y la propaga.
+// layout computes the geometry of the panels and propagates it.
 func (m *Model) layout() {
 	if m.width <= 0 || m.height <= 0 {
 		return
 	}
-	const statusH = 1 // barra de estado inferior
-	const headerH = 1 // fila de rótulos superior (EXPLORADOR / CLAUDE)
-	const sepH = 1    // separador horizontal entre CLAUDE y TERMINAL
+	const statusH = 1     // bottom status bar
+	const headerH = 1     // top label row (EXPLORER / CLAUDE)
+	const termHeaderH = 1 // TERMINAL label row, between CLAUDE and TERMINAL
 
-	// Visibilidad efectiva: lo que el usuario quiere, pero solo si la ventana es
-	// suficientemente ancha. Si no, se oculta automáticamente (responsive).
+	// Effective visibility: what the user wants, but only if the window is wide
+	// enough. Otherwise it is hidden automatically (responsive).
 	m.showSidebar = m.sidebarPref && m.width >= minWidthForSidebar
 	m.autoHidden = m.sidebarPref && !m.showSidebar
 	if !m.showSidebar && m.focus == focusSidebar {
@@ -233,8 +237,8 @@ func (m *Model) layout() {
 
 	bodyH := m.height - statusH
 
-	// Sin bordes exteriores: solo se reserva 1 columna para la costura vertical
-	// (│) cuando el explorador está visible.
+	// No outer borders: only 1 column is reserved for the vertical seam (│)
+	// when the explorer is visible.
 	sbW, seamW := 0, 0
 	if m.showSidebar {
 		sbW = clamp(m.width/4, 20, 40)
@@ -246,8 +250,9 @@ func (m *Model) layout() {
 	m.rightInnerW = rightW
 	m.sbInnerH = bodyH - headerH
 
-	rightContentH := bodyH - headerH - sepH
-	m.claudeInnerH = rightContentH * 3 / 5
+	rightContentH := bodyH - headerH - termHeaderH
+	// CLAUDE takes the larger share; the terminal starts a bit smaller.
+	m.claudeInnerH = rightContentH * 7 / 10
 	m.termInnerH = rightContentH - m.claudeInnerH
 
 	m.sidebar.SetSize(max(sbW, 1), max(m.sbInnerH, 1))
@@ -258,32 +263,33 @@ func (m *Model) layout() {
 	}
 }
 
-// View implementa tea.Model.
+// View implements tea.Model.
 func (m *Model) View() string {
 	if m.width == 0 {
-		return "Iniciando code-tui…"
+		return "Starting code-tui…"
 	}
 
 	bodyH := m.height - 1
 
-	// Columna derecha: CLAUDE arriba, separador con rótulo, TERMINAL abajo.
-	// Si el selector de sesión está activo, ocupa el área de CLAUDE.
+	// Right column: CLAUDE on top, TERMINAL below. The TERMINAL label uses the
+	// same header style as the others. If the session picker is active, it
+	// takes over the CLAUDE area.
 	claudeView := m.claude.View()
 	if m.picker != nil {
 		claudeView = m.picker.View()
 	}
-	rightHeader := headerLabel(m.claude.Name(), m.focus == focusClaude, m.rightInnerW)
+	claudeHeader := headerLabel(m.claude.Name(), m.focus == focusClaude, m.rightInnerW)
 	claudeContent := blockRect(claudeView, m.rightInnerW, m.claudeInnerH)
-	sep := horizSep(m.term.Name(), m.focus == focusTerminal, m.rightInnerW)
+	termHeader := headerLabel(m.term.Name(), m.focus == focusTerminal, m.rightInnerW)
 	termContent := blockRect(m.term.View(), m.rightInnerW, m.termInnerH)
-	right := lipgloss.JoinVertical(lipgloss.Left, rightHeader, claudeContent, sep, termContent)
+	right := lipgloss.JoinVertical(lipgloss.Left, claudeHeader, claudeContent, termHeader, termContent)
 
 	body := right
 	if m.showSidebar {
-		sbHeader := headerLabel("EXPLORADOR", m.focus == focusSidebar, m.sbInnerW)
+		sbHeader := headerLabel("EXPLORER", m.focus == focusSidebar, m.sbInnerW)
 		sbContent := blockRect(m.sidebar.View(), m.sbInnerW, m.sbInnerH)
 		left := lipgloss.JoinVertical(lipgloss.Left, sbHeader, sbContent)
-		seam := seamColumn(bodyH, 1+m.claudeInnerH) // ├ en la fila del separador
+		seam := seamColumn(bodyH, 1+m.claudeInnerH) // ├ on the TERMINAL header row
 		body = lipgloss.JoinHorizontal(lipgloss.Top, left, seam, right)
 	}
 
