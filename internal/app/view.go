@@ -122,6 +122,8 @@ func (m *Model) statusBar() string {
 
 	var hints string
 	switch {
+	case m.focus == focusSidebar:
+		hints = " ↑/↓ move · Enter/→ expand · ← collapse · Ctrl+B hide · Ctrl+Q quit"
 	case m.focus == focusTerminal:
 		hints = " Alt++ new tab · Alt+- close · Alt+←/→ switch · Alt+1 Claude · Ctrl+Q quit"
 	case m.autoHidden:
