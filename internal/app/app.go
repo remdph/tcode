@@ -226,7 +226,7 @@ func (m *Model) layout() {
 	const statusH = 1     // bottom status bar
 	const headerH = 1     // top label row (EXPLORER / CLAUDE)
 	const termHeaderH = 1 // TERMINAL label row, between CLAUDE and TERMINAL
-	const dividerH = 3    // dividers: below CLAUDE, above and below TERMINAL
+	const dividerH = 4    // dividers: above and below CLAUDE, above and below TERMINAL
 
 	// Effective visibility: what the user wants, but only if the window is wide
 	// enough. Otherwise it is hidden automatically (responsive).
@@ -288,6 +288,7 @@ func (m *Model) View() string {
 	termHeader := headerLabel(m.term.Name(), m.focus == focusTerminal, m.rightInnerW)
 	termContent := blockRect(m.term.View(), m.rightInnerW, m.termInnerH)
 	right := lipgloss.JoinVertical(lipgloss.Left,
+		divider, // above CLAUDE title
 		claudeHeader,
 		divider, // below CLAUDE title
 		claudeContent,
@@ -303,7 +304,7 @@ func (m *Model) View() string {
 		sbContent := blockRect(m.sidebar.View(), m.sbInnerW, m.sbInnerH)
 		left := lipgloss.JoinVertical(lipgloss.Left, sbHeader, sbContent)
 		// ├ junctions on each divider row of the right column.
-		seam := seamColumn(bodyH, 1, 2+m.claudeInnerH, 4+m.claudeInnerH)
+		seam := seamColumn(bodyH, 0, 2, 3+m.claudeInnerH, 5+m.claudeInnerH)
 		body = lipgloss.JoinHorizontal(lipgloss.Top, left, seam, right)
 	}
 
