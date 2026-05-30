@@ -226,6 +226,7 @@ func (m *Model) layout() {
 	const statusH = 1     // bottom status bar
 	const headerH = 1     // top label row (EXPLORER / CLAUDE)
 	const termHeaderH = 1 // TERMINAL label row, between CLAUDE and TERMINAL
+	const dividerH = 3    // dividers: below CLAUDE, above and below TERMINAL
 
 	// Effective visibility: what the user wants, but only if the window is wide
 	// enough. Otherwise it is hidden automatically (responsive).
@@ -250,10 +251,13 @@ func (m *Model) layout() {
 	m.rightInnerW = rightW
 	m.sbInnerH = bodyH - headerH
 
-	rightContentH := bodyH - headerH - termHeaderH
+	rightContentH := bodyH - headerH - termHeaderH - dividerH
+	if rightContentH < 2 {
+		rightContentH = 2
+	}
 	// CLAUDE takes the larger share; the terminal starts a bit smaller.
-	m.claudeInnerH = rightContentH * 7 / 10
-	m.termInnerH = rightContentH - m.claudeInnerH
+	m.claudeInnerH = max(rightContentH*7/10, 1)
+	m.termInnerH = max(rightContentH-m.claudeInnerH, 1)
 
 	m.sidebar.SetSize(max(sbW, 1), max(m.sbInnerH, 1))
 	m.claude.SetSize(max(rightW, 1), max(m.claudeInnerH, 1))
@@ -278,18 +282,28 @@ func (m *Model) View() string {
 	if m.picker != nil {
 		claudeView = m.picker.View()
 	}
+	divider := hLine(m.rightInnerW)
 	claudeHeader := headerLabel(m.claude.Name(), m.focus == focusClaude, m.rightInnerW)
 	claudeContent := blockRect(claudeView, m.rightInnerW, m.claudeInnerH)
 	termHeader := headerLabel(m.term.Name(), m.focus == focusTerminal, m.rightInnerW)
 	termContent := blockRect(m.term.View(), m.rightInnerW, m.termInnerH)
-	right := lipgloss.JoinVertical(lipgloss.Left, claudeHeader, claudeContent, termHeader, termContent)
+	right := lipgloss.JoinVertical(lipgloss.Left,
+		claudeHeader,
+		divider, // below CLAUDE title
+		claudeContent,
+		divider, // above TERMINAL title
+		termHeader,
+		divider, // below TERMINAL title
+		termContent,
+	)
 
 	body := right
 	if m.showSidebar {
 		sbHeader := headerLabel("EXPLORER", m.focus == focusSidebar, m.sbInnerW)
 		sbContent := blockRect(m.sidebar.View(), m.sbInnerW, m.sbInnerH)
 		left := lipgloss.JoinVertical(lipgloss.Left, sbHeader, sbContent)
-		seam := seamColumn(bodyH, 1+m.claudeInnerH) // ├ on the TERMINAL header row
+		// ├ junctions on each divider row of the right column.
+		seam := seamColumn(bodyH, 1, 2+m.claudeInnerH, 4+m.claudeInnerH)
 		body = lipgloss.JoinHorizontal(lipgloss.Top, left, seam, right)
 	}
 

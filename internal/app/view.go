@@ -31,12 +31,24 @@ func headerLabel(label string, focused bool, w int) string {
 	return st.Render(" " + label)
 }
 
+// hLine draws a horizontal divider line of width w.
+func hLine(w int) string {
+	if w < 1 {
+		w = 1
+	}
+	return lipgloss.NewStyle().Foreground(dimColor).Render(strings.Repeat("─", w))
+}
+
 // seamColumn draws the vertical seam (│) of height h between the explorer and
-// the right column, with a ├ on the TERMINAL header row.
-func seamColumn(h, sepRow int) string {
+// the right column, with a ├ on every row that has a horizontal divider.
+func seamColumn(h int, junctions ...int) string {
+	isJunction := make(map[int]bool, len(junctions))
+	for _, j := range junctions {
+		isJunction[j] = true
+	}
 	lines := make([]string, h)
 	for i := range lines {
-		if i == sepRow {
+		if isJunction[i] {
 			lines[i] = "├"
 		} else {
 			lines[i] = "│"
