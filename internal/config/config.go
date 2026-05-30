@@ -11,6 +11,7 @@ import (
 // Project holds the persisted settings for a single working directory.
 type Project struct {
 	SidebarWidth int `json:"sidebarWidth,omitempty"`
+	GitWidth     int `json:"gitWidth,omitempty"`
 }
 
 // encodeDir turns a directory path into a safe file name (non-alphanumeric

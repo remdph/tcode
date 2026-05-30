@@ -75,6 +75,7 @@ go build -o code-tui .
 | Key             | Action                                          |
 |-----------------|-------------------------------------------------|
 | `Ctrl+B`        | Show / hide the side explorer (and focus it)    |
+| `Ctrl+G`        | Show / hide the Git panel (and focus it)        |
 | `Alt+1`         | Focus the CLAUDE panel                          |
 | `Alt+2`         | Focus the TERMINAL panel                        |
 | `Alt+3`         | Focus the explorer (when visible)               |
@@ -88,6 +89,17 @@ CLAUDE.
 
 The TERMINAL panel supports multiple tabs, shown next to its label (the active
 one is highlighted with the accent color). Each tab is an independent shell.
+
+The **Git panel** (`Ctrl+G`) opens on the right and has two tabs, switched with
+`Tab` (or `←/→`):
+
+- **CHANGES** (default) — the pending working-tree changes (`git status`), with a
+  colored status marker per file.
+- **HISTORY** — the commits on the current branch, each showing its short hash,
+  any tags (`⚑`), the subject, and the author and relative date.
+
+Navigate with `↑/↓`, `r` refreshes, and `+/-` resize the panel (its width is
+remembered per project, like the explorer).
 
 In the explorer (when focused): `↑/↓` or `j/k` to move, `→` to expand a folder,
 `←` to collapse, and `+` / `-` to resize the explorer (its width is remembered
@@ -126,7 +138,9 @@ internal/sidebar/   File explorer (tree)
 internal/terminal/  PTY-backed terminal panel + vt emulator
 internal/sessions/  Discovery of past Claude Code sessions
 internal/picker/    Session selector UI
+internal/gitpanel/  Git panel (CHANGES / HISTORY)
 internal/theme/     Accent color (Omarchy integration)
+internal/config/    Per-project settings (panel widths)
 ```
 
 ## Status

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"code-tui/internal/config"
+	"code-tui/internal/gitpanel"
 	"code-tui/internal/picker"
 	"code-tui/internal/sessions"
 	"code-tui/internal/sidebar"
@@ -23,6 +24,7 @@ const (
 	focusSidebar focus = iota
 	focusClaude
 	focusTerminal
+	focusGit
 )
 
 // Model is the root Bubble Tea model.
@@ -44,8 +46,13 @@ type Model struct {
 	showSidebar  bool // effective visibility (pref + available width)
 	autoHidden   bool // hidden automatically because the window is too narrow
 	sidebarWidth int  // explorer width in columns (persisted per project)
-	started      bool
-	prog         *tea.Program
+
+	// Git panel (right side), toggled with Ctrl+G.
+	gitPanel gitpanel.Model
+	showGit  bool
+	gitWidth int // git panel width in columns (persisted per project)
+	started  bool
+	prog     *tea.Program
 
 	// picker is the session selector that occupies the CLAUDE panel until the
 	// user chooses; nil when there are no past sessions or one was already chosen.
@@ -63,6 +70,7 @@ type Model struct {
 	rightInnerW              int
 	sbInnerH                 int
 	claudeInnerH, termInnerH int
+	gitInnerW, gitInnerH     int
 }
 
 // New builds the root model pointing at dir. The terminal processes are not
@@ -73,20 +81,26 @@ func New(dir string) *Model {
 		shell = "/bin/bash"
 	}
 
-	// Per-project explorer width (persisted), falling back to the default.
-	sidebarWidth := config.Load(dir).SidebarWidth
+	// Per-project panel widths (persisted), falling back to the defaults.
+	cfg := config.Load(dir)
+	sidebarWidth := cfg.SidebarWidth
 	if sidebarWidth == 0 {
 		sidebarWidth = defaultSidebarWidth
 	}
-	sidebarWidth = clamp(sidebarWidth, minSidebarWidth, maxSidebarWidth)
+	gitWidth := cfg.GitWidth
+	if gitWidth == 0 {
+		gitWidth = defaultGitWidth
+	}
 
 	m := &Model{
 		dir:          dir,
 		shell:        shell,
 		sidebarPref:  false, // the explorer starts hidden (toggle with Ctrl+B)
-		sidebarWidth: sidebarWidth,
+		sidebarWidth: clamp(sidebarWidth, minSidebarWidth, maxSidebarWidth),
+		gitWidth:     clamp(gitWidth, minGitWidth, maxGitWidth),
 		focus:        focusClaude,
 		sidebar:      sidebar.New(dir),
+		gitPanel:     gitpanel.New(dir),
 		claude:       terminal.New(1, "CLAUDE", dir, claudeArgs(nil)),
 		terms:        []*terminal.Model{terminal.New(2, "TERMINAL", dir, []string{shell})},
 		nextTermID:   3,
@@ -181,6 +195,9 @@ func (m *Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case k.String() == "ctrl+b" || k.String() == "super+b":
 		m.toggleSidebar()
 		return m, nil
+	case k.Type == tea.KeyCtrlG:
+		m.toggleGit()
+		return m, nil
 	case k.Alt && runeIs(k, '1'):
 		m.focus = focusClaude
 		return m, nil
@@ -241,6 +258,19 @@ func (m *Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		default:
 			m.activeTermModel().SendKey(k)
 		}
+	case focusGit:
+		// +/- resize the Git panel (persisted per project).
+		switch k.String() {
+		case "+", "=":
+			m.resizeGit(+2)
+			return m, nil
+		case "-":
+			m.resizeGit(-2)
+			return m, nil
+		}
+		var cmd tea.Cmd
+		m.gitPanel, cmd = m.gitPanel.Update(k)
+		return m, cmd
 	}
 	return m, nil
 }
@@ -371,18 +401,50 @@ func (m *Model) editorDims() (w, h int) {
 // explorer is hidden automatically to give the panels more room.
 const minWidthForSidebar = 80
 
-// Explorer width bounds and default (in columns).
+// Panel width bounds and defaults (in columns).
 const (
 	defaultSidebarWidth = 24
 	minSidebarWidth     = 12
 	maxSidebarWidth     = 50
+
+	defaultGitWidth = 36
+	minGitWidth     = 18
+	maxGitWidth     = 70
 )
 
-// resizeSidebar changes the explorer width by delta and persists it per project.
+// saveConfig persists the per-project panel widths.
+func (m *Model) saveConfig() {
+	_ = config.Save(m.dir, config.Project{
+		SidebarWidth: m.sidebarWidth,
+		GitWidth:     m.gitWidth,
+	})
+}
+
+// resizeSidebar changes the explorer width by delta and persists it.
 func (m *Model) resizeSidebar(delta int) {
 	m.sidebarWidth = clamp(m.sidebarWidth+delta, minSidebarWidth, maxSidebarWidth)
 	m.layout()
-	_ = config.Save(m.dir, config.Project{SidebarWidth: m.sidebarWidth})
+	m.saveConfig()
+}
+
+// resizeGit changes the Git panel width by delta and persists it.
+func (m *Model) resizeGit(delta int) {
+	m.gitWidth = clamp(m.gitWidth+delta, minGitWidth, maxGitWidth)
+	m.layout()
+	m.saveConfig()
+}
+
+// toggleGit shows/hides the Git panel. Showing it focuses it and refreshes its
+// data; hiding it returns focus to CLAUDE.
+func (m *Model) toggleGit() {
+	m.showGit = !m.showGit
+	if m.showGit {
+		m.gitPanel.Refresh()
+		m.focus = focusGit
+	} else if m.focus == focusGit {
+		m.focus = focusClaude
+	}
+	m.layout()
 }
 
 // layout computes the geometry of the panels and propagates it.
@@ -405,19 +467,25 @@ func (m *Model) layout() {
 
 	bodyH := m.height - statusH
 
-	// No outer borders: only 1 column is reserved for the vertical seam (│)
-	// when the explorer is visible.
-	sbW, seamW := 0, 0
+	// No outer borders: only 1 column is reserved for each vertical seam (│)
+	// next to the explorer (left) and the Git panel (right).
+	sbW, leftSeam := 0, 0
 	if m.showSidebar {
-		// Use the persisted width, but never let it take more than half the window.
-		sbW = clamp(m.sidebarWidth, 8, m.width/2)
-		seamW = 1
+		sbW = clamp(m.sidebarWidth, 8, m.width/3)
+		leftSeam = 1
 	}
-	rightW := m.width - sbW - seamW
+	gitW, rightSeam := 0, 0
+	if m.showGit {
+		gitW = clamp(m.gitWidth, 12, m.width/3)
+		rightSeam = 1
+	}
+	rightW := m.width - sbW - leftSeam - gitW - rightSeam
 
 	m.sbInnerW = sbW
 	m.rightInnerW = rightW
 	m.sbInnerH = bodyH - headerH
+	m.gitInnerW = gitW
+	m.gitInnerH = bodyH - headerH // header row = tab bar
 
 	rightContentH := bodyH - headerH - termHeaderH - dividerH
 	if rightContentH < 2 {
@@ -438,6 +506,9 @@ func (m *Model) layout() {
 	}
 	if m.picker != nil {
 		m.picker.SetSize(max(rightW, 1), max(m.claudeInnerH, 1))
+	}
+	if m.showGit {
+		m.gitPanel.SetSize(max(gitW, 1), max(m.gitInnerH, 1))
 	}
 }
 
@@ -480,16 +551,26 @@ func (m *Model) View() string {
 		termContent,
 	)
 
-	body := right
+	// Divider rows of the middle column, where the seams branch.
+	jr := []int{0, 2, 3 + m.claudeInnerH, 5 + m.claudeInnerH}
+
+	// Compose the columns left-to-right: [explorer] [seam] middle [seam] [git].
+	cols := []string{}
 	if m.showSidebar {
 		sbHeader := headerLabel("EXPLORER", m.focus == focusSidebar, m.sbInnerW)
 		sbContent := blockRect(m.sidebar.View(), m.sbInnerW, m.sbInnerH)
 		left := lipgloss.JoinVertical(lipgloss.Left, sbHeader, sbContent)
-		// ├ junctions on each divider row of the right column.
-		seam := seamColumn(bodyH, 0, 2, 3+m.claudeInnerH, 5+m.claudeInnerH)
-		body = lipgloss.JoinHorizontal(lipgloss.Top, left, seam, right)
+		cols = append(cols, left, seamColumn(bodyH, "├", jr...))
+	}
+	cols = append(cols, right)
+	if m.showGit {
+		gitHeader := m.gitPanel.TabBar(m.focus == focusGit, m.gitInnerW)
+		gitContent := blockRect(m.gitPanel.View(), m.gitInnerW, m.gitInnerH)
+		gitBlock := lipgloss.JoinVertical(lipgloss.Left, gitHeader, gitContent)
+		cols = append(cols, seamColumn(bodyH, "┤", jr...), gitBlock)
 	}
 
+	body := lipgloss.JoinHorizontal(lipgloss.Top, cols...)
 	return lipgloss.JoinVertical(lipgloss.Left, body, m.statusBar())
 }
 
