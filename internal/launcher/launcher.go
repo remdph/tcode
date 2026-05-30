@@ -23,7 +23,7 @@ type Model struct {
 // New builds the launcher with EXEC DIR first, then the recent directories.
 func New(execDir string, recents []string) Model {
 	items := []picker.Item{{
-		Title:    "EXEC DIR",
+		Title:    "CURRENT PATH",
 		Subtitle: homify(execDir),
 		ID:       execDir,
 		IsNew:    true,
@@ -72,7 +72,12 @@ func (m Model) View() string {
 	if m.width == 0 {
 		return ""
 	}
-	box := lipgloss.NewStyle().Padding(1, 2).Render(m.picker.View())
+	content := m.picker.View()
+	// Show the T-CODE logo above the selector when there is room for it.
+	if m.width >= bannerWidth()+4 && m.height >= 18 {
+		content = lipgloss.JoinVertical(lipgloss.Center, banner(), "", m.picker.View())
+	}
+	box := lipgloss.NewStyle().Padding(1, 2).Render(content)
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, box)
 }
 

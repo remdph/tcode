@@ -67,7 +67,7 @@ go build -trimpath -ldflags="-s -w" -o ~/.local/bin/tcode .
 Then invoke it from anywhere:
 
 ```bash
-tcode            # shows the project launcher (EXEC DIR + recents)
+tcode            # shows the project launcher (CURRENT PATH + recents)
 tcode /some/dir  # opens that directory directly
 tcode ~/repos/x  # ~ is expanded
 tcode --version  # prints the version (0.1.0)
@@ -78,7 +78,7 @@ tcode --version  # prints the version (0.1.0)
 Running `tcode` with **no argument** first shows a launcher (the same selector
 used for Claude sessions) to choose which project to open:
 
-- The first option, **EXEC DIR**, opens the directory you ran `tcode` from.
+- The first option, **CURRENT PATH**, opens the directory you ran `tcode` from.
 - Below it are the **recently opened** directories — each shown by its folder
   name with the full path on a second line.
 
@@ -163,7 +163,7 @@ internal/sidebar/   File explorer (tree)
 internal/terminal/  PTY-backed terminal panel + vt emulator
 internal/sessions/  Discovery of past Claude Code sessions
 internal/picker/    Selector UI (sessions and the launcher)
-internal/launcher/  Startup project launcher (EXEC DIR + recents)
+internal/launcher/  Startup project launcher (CURRENT PATH + recents)
 internal/recents/   Recently opened directories
 internal/gitpanel/  Git panel (CHANGES / HISTORY)
 internal/theme/     Accent color (Omarchy integration)
@@ -172,7 +172,10 @@ internal/config/    Per-project settings (panel widths)
 
 ## Status
 
-This is an early milestone: layout + explorer + two virtual terminals + the
-Claude session picker. There is **no** text editor yet (that comes later).
-Possible next steps: a visible cursor in the terminal panels, mouse-wheel
-scrolling, click to focus, a command palette and, later on, the editor.
+**v0.1.0.** Working: the project launcher (CURRENT PATH + recents), file
+explorer, claude-cli with a session picker, multiple terminal tabs, a floating
+nano/vi editor, a Git panel (CHANGES / HISTORY), Omarchy accent theming, visible
+cursors and per-project persisted panel widths.
+
+Possible next steps: mouse-wheel scrolling and click-to-focus, a command
+palette, resizing the CLAUDE/TERMINAL split, and Git actions (stage/commit).
