@@ -1,0 +1,12 @@
+# Binario compilado
+/code-tui
+*.exe
+
+# Artefactos de Go
+*.test
+*.out
+/dist/
+
+# Editor / SO
+.DS_Store
+*.swp
