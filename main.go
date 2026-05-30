@@ -1,11 +1,19 @@
 // Command code-tui is a VSCode-like environment for the terminal: a file
 // explorer on the left, claude-cli on the right and a terminal below.
+//
+// Usage:
+//
+//	code-tui [directory]
+//
+// With no argument it opens the current working directory as the project.
+// If a directory is given, that folder is opened instead.
 package main
 
 import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"code-tui/internal/app"
 	"code-tui/internal/theme"
@@ -14,16 +22,10 @@ import (
 )
 
 func main() {
-	dir, err := os.Getwd()
+	dir, err := resolveDir(os.Args[1:])
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "error:", err)
+		fmt.Fprintln(os.Stderr, "code-tui:", err)
 		os.Exit(1)
-	}
-	if len(os.Args) > 1 {
-		dir = os.Args[1]
-	}
-	if abs, err := filepath.Abs(dir); err == nil {
-		dir = abs
 	}
 
 	// Pick up the Omarchy accent color, if present, before anything renders.
@@ -34,7 +36,44 @@ func main() {
 	m.SetProgram(p)
 
 	if _, err := p.Run(); err != nil {
-		fmt.Fprintln(os.Stderr, "error:", err)
+		fmt.Fprintln(os.Stderr, "code-tui:", err)
 		os.Exit(1)
 	}
+}
+
+// resolveDir determines the project directory to open. With no argument it uses
+// the current working directory; with one argument it uses (and validates) that
+// path. A leading ~ is expanded to the home directory.
+func resolveDir(args []string) (string, error) {
+	if len(args) == 0 {
+		return os.Getwd()
+	}
+	if len(args) > 1 {
+		return "", fmt.Errorf("expected at most one directory argument, got %d", len(args))
+	}
+
+	dir := expandHome(args[0])
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return "", err
+	}
+
+	info, err := os.Stat(abs)
+	if err != nil {
+		return "", fmt.Errorf("cannot open %q: %w", args[0], err)
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("%q is not a directory", args[0])
+	}
+	return abs, nil
+}
+
+// expandHome replaces a leading ~ with the user's home directory.
+func expandHome(path string) string {
+	if path == "~" || strings.HasPrefix(path, "~/") {
+		if home, err := os.UserHomeDir(); err == nil {
+			return filepath.Join(home, strings.TrimPrefix(path[1:], "/"))
+		}
+	}
+	return path
 }
