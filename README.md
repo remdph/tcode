@@ -1,8 +1,35 @@
-# code-tui
+# code-tui (`tcode`)
 
-A **VSCode-like environment for the terminal** (TUI), written in Go with
-[Bubble Tea](https://github.com/charmbracelet/bubbletea). Once installed it is
-invoked as **`tcode`**. Current version: **v0.1.0**.
+**A VS Code–style workspace that lives entirely in your terminal.**
+
+`tcode` recreates the comfort of an editor like VS Code as a pure console app
+(TUI): a file explorer on one side, **Claude Code** running in one pane, and one
+or more **virtual terminals** in another — all arranged in a tidy, keyboard-driven
+layout, with a Git panel and a project launcher. It is written in Go with
+[Bubble Tea](https://github.com/charmbracelet/bubbletea) and rendered through a
+real terminal emulator, so the panes are genuine PTYs, not fake text boxes.
+
+Think of it as a lightweight "IDE shell" whose primary tenant is **Claude Code**:
+you browse and open files on the left, talk to Claude on the right, and drop into
+a shell whenever you need one — without ever leaving the terminal or juggling tmux
+splits by hand.
+
+Once installed it is invoked as **`tcode`**. Current version: **v0.1.0**.
+
+## What you get
+
+- **Claude Code, front and center** — `claude` runs in its own virtual terminal,
+  with a built-in picker to start a new session or **resume a past one** for the
+  current project.
+- **Virtual terminals in a comfortable layout** — real shells in PTYs, with
+  multiple tabs, laid out below Claude so you never lose your place.
+- **A navigable file explorer** — a collapsible tree of the project, with a
+  floating `nano`/`vi` editor for quick edits.
+- **A Git panel** — pending changes and branch history at a glance.
+- **A project launcher** — pick from recently opened directories (or the current
+  path) on startup, under a `T-CODE` banner.
+- **Adapts to your theme** — picks up your [Omarchy](https://omarchy.org) accent
+  color automatically.
 
 The interface skeleton:
 
@@ -160,7 +187,7 @@ explorer). It reads `accent` (and `selection_foreground` for contrast) from
 `~/.config/omarchy/current/theme/colors.toml`. Without Omarchy it falls back to
 a built-in blue.
 
-## Layout
+## Source layout
 
 ```
 main.go             Entry point
