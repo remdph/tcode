@@ -158,7 +158,7 @@ func (m *Model) statusBar() string {
 	case m.autoHidden:
 		hints = " explorer hidden (window too narrow) · Alt+1/2 focus · Ctrl+Q quit"
 	default:
-		hints = " Ctrl+B explorer · Ctrl+G git · Alt+1 Claude · Alt+2 terminal · Ctrl+Q quit"
+		hints = " Ctrl+B explorer · Ctrl+G git · Ctrl+T terminals · Alt+1/2 focus · Ctrl+Q quit"
 	}
 	rest := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("250")).

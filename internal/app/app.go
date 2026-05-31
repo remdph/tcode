@@ -27,6 +27,9 @@ const (
 	focusGit
 )
 
+// claudeTermID is the fixed terminal id of the CLAUDE panel (terminals use 2+).
+const claudeTermID = 1
+
 // Model is the root Bubble Tea model.
 type Model struct {
 	dir           string
@@ -36,10 +39,11 @@ type Model struct {
 	claude  *terminal.Model
 
 	// terms holds the terminal tabs; activeTerm is the visible/focused one.
-	terms      []*terminal.Model
-	activeTerm int
-	nextTermID int
-	shell      string
+	terms         []*terminal.Model
+	activeTerm    int
+	nextTermID    int
+	shell         string
+	showTerminals bool // the TERMINAL section is visible (Ctrl+T)
 
 	focus        focus
 	sidebarPref  bool // what the user wants (Ctrl+B)
@@ -93,34 +97,40 @@ func New(dir string) *Model {
 	}
 
 	m := &Model{
-		dir:          dir,
-		shell:        shell,
-		sidebarPref:  false, // the explorer starts hidden (toggle with Ctrl+B)
-		sidebarWidth: clamp(sidebarWidth, minSidebarWidth, maxSidebarWidth),
-		gitWidth:     clamp(gitWidth, minGitWidth, maxGitWidth),
-		focus:        focusClaude,
-		sidebar:      sidebar.New(dir),
-		gitPanel:     gitpanel.New(dir),
-		claude:       terminal.New(1, "CLAUDE", dir, claudeArgs(nil)),
-		terms:        []*terminal.Model{terminal.New(2, "TERMINAL", dir, []string{shell})},
-		nextTermID:   3,
+		dir:           dir,
+		shell:         shell,
+		sidebarPref:   false, // the explorer starts hidden (toggle with Ctrl+B)
+		showTerminals: true,
+		sidebarWidth:  clamp(sidebarWidth, minSidebarWidth, maxSidebarWidth),
+		gitWidth:      clamp(gitWidth, minGitWidth, maxGitWidth),
+		focus:         focusClaude,
+		sidebar:       sidebar.New(dir),
+		gitPanel:      gitpanel.New(dir),
+		claude:        terminal.New(claudeTermID, "CLAUDE", dir, claudeArgs(nil)),
+		terms:         []*terminal.Model{terminal.New(2, "TERMINAL", dir, []string{shell})},
+		nextTermID:    3,
 	}
 
 	// If there are past sessions in this directory, a selector is shown in the
 	// CLAUDE panel; the first option is always to create a new session.
 	if past := sessions.List(dir); len(past) > 0 {
-		items := []picker.Item{{Title: "New session", IsNew: true}}
-		for _, s := range past {
-			items = append(items, picker.Item{
-				ID:       s.ID,
-				Title:    s.Title,
-				Subtitle: s.ModTime.Format("2006-01-02 15:04") + "  ·  " + shortID(s.ID),
-			})
-		}
-		p := picker.New("Claude sessions in this directory — ↑/↓ and Enter:", items)
-		m.picker = &p
+		m.buildSessionPicker(past)
 	}
 	return m
+}
+
+// buildSessionPicker (re)builds the CLAUDE session selector from past.
+func (m *Model) buildSessionPicker(past []sessions.Session) {
+	items := []picker.Item{{Title: "New session", IsNew: true}}
+	for _, s := range past {
+		items = append(items, picker.Item{
+			ID:       s.ID,
+			Title:    s.Title,
+			Subtitle: s.ModTime.Format("2006-01-02 15:04") + "  ·  " + shortID(s.ID),
+		})
+	}
+	p := picker.New("Claude sessions in this directory — ↑/↓ and Enter:", items)
+	m.picker = &p
 }
 
 // claudeArgs builds the claude command. It always launches with
@@ -165,10 +175,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case terminal.ExitMsg:
-		// Closing the editor (e.g. quitting nano) dismisses the overlay.
-		if m.editor != nil && msg.ID == m.editorID {
+		switch {
+		case m.editor != nil && msg.ID == m.editorID:
+			// Closing the editor (e.g. quitting nano) dismisses the overlay.
 			m.editor.Close()
 			m.editor = nil
+		case msg.ID == claudeTermID:
+			// claude-cli exited (e.g. Ctrl+C to quit): return to the session menu.
+			m.reopenSessionMenu()
 		}
 		return m, nil
 
@@ -198,11 +212,16 @@ func (m *Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case k.Type == tea.KeyCtrlG:
 		m.toggleGit()
 		return m, nil
+	case k.Type == tea.KeyCtrlT:
+		m.toggleTerminals()
+		return m, nil
 	case k.Alt && runeIs(k, '1'):
 		m.focus = focusClaude
 		return m, nil
 	case k.Alt && runeIs(k, '2'):
-		m.focus = focusTerminal
+		if m.showTerminals {
+			m.focus = focusTerminal
+		}
 		return m, nil
 	case k.Alt && runeIs(k, '3'):
 		if m.showSidebar {
@@ -305,15 +324,16 @@ func (m *Model) activeTermModel() *terminal.Model { return m.terms[m.activeTerm]
 
 // newTerminal opens a new terminal tab, makes it active and focuses it.
 func (m *Model) newTerminal() {
+	m.showTerminals = true // creating a terminal reveals the section
 	t := terminal.New(m.nextTermID, "TERMINAL", m.dir, []string{m.shell})
 	m.nextTermID++
-	t.SetSize(max(m.rightInnerW, 1), max(m.termInnerH, 1))
-	if m.started {
-		_ = t.Start(m.prog)
-	}
 	m.terms = append(m.terms, t)
 	m.activeTerm = len(m.terms) - 1
 	m.focus = focusTerminal
+	m.layout() // size the new terminal (and the rest) before starting it
+	if m.started {
+		_ = t.Start(m.prog)
+	}
 }
 
 // closeTerminal closes the active tab, keeping at least one terminal open.
@@ -341,6 +361,26 @@ func (m *Model) startClaude(resumeID *string) {
 	}
 	m.claude.SetArgs(claudeArgs(resumeID))
 	_ = m.claude.Start(m.prog)
+}
+
+// reopenSessionMenu is called when claude-cli exits: it replaces the dead CLAUDE
+// terminal with a fresh one and shows the session selector again.
+func (m *Model) reopenSessionMenu() {
+	m.claude.Close()
+	m.claude = terminal.New(claudeTermID, "CLAUDE", m.dir, claudeArgs(nil))
+	m.buildSessionPicker(sessions.List(m.dir))
+	m.focus = focusClaude
+	m.layout()
+}
+
+// toggleTerminals shows/hides the TERMINAL section (Ctrl+T). The shells keep
+// running while hidden.
+func (m *Model) toggleTerminals() {
+	m.showTerminals = !m.showTerminals
+	if !m.showTerminals && m.focus == focusTerminal {
+		m.focus = focusClaude
+	}
+	m.layout()
 }
 
 func (m *Model) cleanup() {
@@ -452,10 +492,8 @@ func (m *Model) layout() {
 	if m.width <= 0 || m.height <= 0 {
 		return
 	}
-	const statusH = 1     // bottom status bar
-	const headerH = 1     // top label row (EXPLORER / CLAUDE)
-	const termHeaderH = 1 // TERMINAL label row, between CLAUDE and TERMINAL
-	const dividerH = 4    // dividers: above and below CLAUDE, above and below TERMINAL
+	const statusH = 1 // bottom status bar
+	const headerH = 1 // top label row (EXPLORER / CLAUDE)
 
 	// Effective visibility: what the user wants, but only if the window is wide
 	// enough. Otherwise it is hidden automatically (responsive).
@@ -487,18 +525,27 @@ func (m *Model) layout() {
 	m.gitInnerW = gitW
 	m.gitInnerH = bodyH - headerH // header row = tab bar
 
-	rightContentH := bodyH - headerH - termHeaderH - dividerH
-	if rightContentH < 2 {
-		rightContentH = 2
+	if m.showTerminals {
+		// CLAUDE header + TERMINAL header + 4 dividers (above/below each).
+		rightContentH := bodyH - 2*headerH - 4
+		if rightContentH < 2 {
+			rightContentH = 2
+		}
+		// CLAUDE takes the larger share; the terminal starts a bit smaller.
+		m.claudeInnerH = max(rightContentH*7/10, 1)
+		m.termInnerH = max(rightContentH-m.claudeInnerH, 1)
+	} else {
+		// Only CLAUDE: its header plus a divider above and below it.
+		m.claudeInnerH = max(bodyH-headerH-2, 1)
+		m.termInnerH = 0
 	}
-	// CLAUDE takes the larger share; the terminal starts a bit smaller.
-	m.claudeInnerH = max(rightContentH*7/10, 1)
-	m.termInnerH = max(rightContentH-m.claudeInnerH, 1)
 
 	m.sidebar.SetSize(max(sbW, 1), max(m.sbInnerH, 1))
 	m.claude.SetSize(max(rightW, 1), max(m.claudeInnerH, 1))
-	for _, t := range m.terms {
-		t.SetSize(max(rightW, 1), max(m.termInnerH, 1))
+	if m.showTerminals {
+		for _, t := range m.terms {
+			t.SetSize(max(rightW, 1), max(m.termInnerH, 1))
+		}
 	}
 	if m.editor != nil {
 		ew, eh := m.editorDims()
@@ -533,26 +580,37 @@ func (m *Model) View() string {
 	if m.picker != nil {
 		claudeView = m.picker.View()
 	}
-	at := m.activeTermModel()
-	at.SetFocused(m.focus == focusTerminal)
 	divider := hLine(m.rightInnerW)
 	claudeHeader := headerLabel(m.claude.Name(), m.focus == focusClaude, m.rightInnerW)
 	claudeContent := blockRect(claudeView, m.rightInnerW, m.claudeInnerH)
-	termHeader := terminalHeader(len(m.terms), m.activeTerm, m.focus == focusTerminal, m.rightInnerW)
-	termContent := blockRect(at.View(), m.rightInnerW, m.termInnerH)
-	right := lipgloss.JoinVertical(lipgloss.Left,
-		divider, // above CLAUDE title
-		claudeHeader,
-		divider, // below CLAUDE title
-		claudeContent,
-		divider, // above TERMINAL title
-		termHeader,
-		divider, // below TERMINAL title
-		termContent,
-	)
 
-	// Divider rows of the middle column, where the seams branch.
-	jr := []int{0, 2, 3 + m.claudeInnerH, 5 + m.claudeInnerH}
+	var right string
+	var jr []int // divider rows of the middle column, where the seams branch
+	if m.showTerminals {
+		at := m.activeTermModel()
+		at.SetFocused(m.focus == focusTerminal)
+		termHeader := terminalHeader(len(m.terms), m.activeTerm, m.focus == focusTerminal, m.rightInnerW)
+		termContent := blockRect(at.View(), m.rightInnerW, m.termInnerH)
+		right = lipgloss.JoinVertical(lipgloss.Left,
+			divider, // above CLAUDE title
+			claudeHeader,
+			divider, // below CLAUDE title
+			claudeContent,
+			divider, // above TERMINAL title
+			termHeader,
+			divider, // below TERMINAL title
+			termContent,
+		)
+		jr = []int{0, 2, 3 + m.claudeInnerH, 5 + m.claudeInnerH}
+	} else {
+		right = lipgloss.JoinVertical(lipgloss.Left,
+			divider, // above CLAUDE title
+			claudeHeader,
+			divider, // below CLAUDE title
+			claudeContent,
+		)
+		jr = []int{0, 2}
+	}
 
 	// Compose the columns left-to-right: [explorer] [seam] middle [seam] [git].
 	cols := []string{}

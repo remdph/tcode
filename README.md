@@ -55,6 +55,9 @@ directory (under `~/.claude/projects/<path>`):
 
   Navigate with `↑/↓` (or `j/k`) and confirm with `Enter`.
 
+When claude-cli exits (e.g. you quit it with `Ctrl+C`), the CLAUDE panel returns
+to this session menu so you can start or resume another session.
+
 ## Install
 
 The installed binary is named **`tcode`**. To build and install it to
@@ -101,6 +104,7 @@ go run . /some/dir  # opens another directory
 |-----------------|-------------------------------------------------|
 | `Ctrl+B`        | Show / hide the side explorer (and focus it)    |
 | `Ctrl+G`        | Show / hide the Git panel (and focus it)        |
+| `Ctrl+T`        | Show / hide the TERMINAL section (keeps shells) |
 | `Alt+1`         | Focus the CLAUDE panel                          |
 | `Alt+2`         | Focus the TERMINAL panel                        |
 | `Alt+3`         | Focus the explorer (when visible)               |
@@ -114,6 +118,8 @@ CLAUDE.
 
 The TERMINAL panel supports multiple tabs, shown next to its label (the active
 one is highlighted with the accent color). Each tab is an independent shell.
+`Ctrl+T` hides or shows the whole TERMINAL section (giving CLAUDE the full
+height); the shells keep running while hidden.
 
 The **Git panel** (`Ctrl+G`) opens on the right and has two tabs, switched with
 `Tab` (or `←/→`):
