@@ -7,7 +7,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
+	"code-tui/internal/agents"
 	"code-tui/internal/config"
 	"code-tui/internal/gitpanel"
 	"code-tui/internal/picker"
@@ -29,11 +31,23 @@ const (
 	focusGit
 )
 
-// claudeTab is one tab of the CLAUDE section: a claude-cli terminal plus, until
-// a session is chosen, the session selector shown in its place.
+// pickMode is what selector (if any) a tab is currently showing in place of its
+// running process.
+type pickMode int
+
+const (
+	pickNone    pickMode = iota // the agent is running
+	pickAgent                   // choosing which agent to run
+	pickSession                 // choosing a Claude session to start/resume
+)
+
+// claudeTab is one tab of the agent section: an agent CLI running in a terminal
+// plus, while picking, the agent or session selector shown in its place.
 type claudeTab struct {
+	agent  agents.Agent
 	term   *terminal.Model
-	picker *picker.Model // session selector; nil once a session has been started
+	picker *picker.Model // the active selector; nil only when mode == pickNone
+	mode   pickMode
 }
 
 // Model is the root Bubble Tea model.
@@ -43,7 +57,12 @@ type Model struct {
 
 	sidebar sidebar.Model
 
-	// claudeTabs holds the CLAUDE tabs; activeClaude is the visible/focused one.
+	// agentList is the set of agents detected on PATH; defaultAgent is the one
+	// new tabs launch (empty Bin means "ask on first use").
+	agentList    []agents.Agent
+	defaultAgent agents.Agent
+
+	// claudeTabs holds the agent tabs; activeClaude is the visible/focused one.
 	claudeTabs   []*claudeTab
 	activeClaude int
 
@@ -118,10 +137,40 @@ func New(dir string) *Model {
 		gitPanel:      gitpanel.New(dir),
 		nextID:        1,
 	}
-	// One CLAUDE tab and one TERMINAL tab to start.
+
+	// Detect installed agents and resolve the default. With a saved (still
+	// installed) default, use it. With exactly one agent, adopt it silently.
+	// Otherwise leave it unset so the first tab opens on the agent selector.
+	m.agentList = agents.Detect()
+	if len(m.agentList) == 0 {
+		m.agentList = []agents.Agent{agents.Claude} // fallback: try plain claude
+	}
+	if a, ok := m.findAgent(config.LoadGlobal().DefaultAgent); ok {
+		m.defaultAgent = a
+	} else if len(m.agentList) == 1 {
+		m.setDefaultAgent(m.agentList[0])
+	}
+
+	// One agent tab and one TERMINAL tab to start.
 	m.claudeTabs = []*claudeTab{m.makeClaudeTab()}
 	m.terms = []*terminal.Model{terminal.New(m.allocID(), "TERMINAL", dir, []string{shell})}
 	return m
+}
+
+// findAgent returns the installed agent with the given Bin.
+func (m *Model) findAgent(bin string) (agents.Agent, bool) {
+	for _, a := range m.agentList {
+		if a.Bin == bin {
+			return a, true
+		}
+	}
+	return agents.Agent{}, false
+}
+
+// setDefaultAgent records agent as the default for new tabs and persists it.
+func (m *Model) setDefaultAgent(a agents.Agent) {
+	m.defaultAgent = a
+	_ = config.SaveGlobal(config.Global{DefaultAgent: a.Bin})
 }
 
 // allocID returns a fresh unique terminal id.
@@ -131,18 +180,64 @@ func (m *Model) allocID() int {
 	return id
 }
 
-// makeClaudeTab builds a CLAUDE tab. If the directory has past sessions it opens
-// on the session selector; otherwise it will start a new session directly.
+// makeClaudeTab builds an agent tab. With no default agent yet (first run with
+// several installed) it opens on the agent selector; otherwise it is configured
+// for the default agent (Claude opens on its session selector).
 func (m *Model) makeClaudeTab() *claudeTab {
-	tab := &claudeTab{term: terminal.New(m.allocID(), "CLAUDE", m.dir, claudeArgs(nil))}
-	if past := sessions.List(m.dir); len(past) > 0 {
-		tab.picker = newSessionPicker(past)
+	tab := &claudeTab{}
+	if m.defaultAgent.Bin == "" {
+		m.toAgentPicker(tab)
+		return tab
 	}
+	m.configureTab(tab, m.defaultAgent)
 	return tab
 }
 
-// activeClaudeTab returns the visible/focused CLAUDE tab.
+// toAgentPicker puts tab into agent-selection mode (with a placeholder terminal).
+func (m *Model) toAgentPicker(tab *claudeTab) {
+	tab.agent = agents.Agent{}
+	tab.term = terminal.New(m.allocID(), "AGENT", m.dir, nil)
+	tab.picker = newAgentPicker(m.agentList)
+	tab.mode = pickAgent
+}
+
+// configureTab points tab at agent and chooses its starting state: Claude with
+// past sessions opens on the session selector; everything else launches directly.
+func (m *Model) configureTab(tab *claudeTab, agent agents.Agent) {
+	tab.agent = agent
+	tab.term = terminal.New(m.allocID(), strings.ToUpper(agent.Name), m.dir, agent.Args)
+	if agent.Bin == "claude" {
+		if past := sessions.List(m.dir); len(past) > 0 {
+			tab.picker = newSessionPicker(past)
+			tab.mode = pickSession
+			return
+		}
+	}
+	tab.picker = nil
+	tab.mode = pickNone
+}
+
+// activeClaudeTab returns the visible/focused agent tab.
 func (m *Model) activeClaudeTab() *claudeTab { return m.claudeTabs[m.activeClaude] }
+
+// agentLabel is the uppercased name of the active tab's agent, used as the
+// section header (e.g. "CLAUDE", "CODEX"); "AGENT" while still selecting one.
+func (m *Model) agentLabel() string {
+	if a := m.activeClaudeTab().agent; a.Name != "" {
+		return strings.ToUpper(a.Name)
+	}
+	return "AGENT"
+}
+
+// newAgentPicker builds the agent selector from the installed agents.
+func newAgentPicker(list []agents.Agent) *picker.Model {
+	items := make([]picker.Item, 0, len(list))
+	for _, a := range list {
+		items = append(items, picker.Item{ID: a.Bin, Title: a.Name, Subtitle: a.Bin})
+	}
+	p := picker.New("Select an AI agent — ↑/↓ and Enter:", items)
+	return &p
+}
 
 // newSessionPicker builds the CLAUDE session selector from past sessions; the
 // first option is always to create a new session.
@@ -157,16 +252,6 @@ func newSessionPicker(past []sessions.Session) *picker.Model {
 	}
 	p := picker.New("Claude sessions in this directory — ↑/↓ and Enter:", items)
 	return &p
-}
-
-// claudeArgs builds the claude command. It always launches with
-// --dangerously-skip-permissions; if resumeID is non-empty, that session is resumed.
-func claudeArgs(resumeID *string) []string {
-	args := []string{"claude", "--dangerously-skip-permissions"}
-	if resumeID != nil && *resumeID != "" {
-		args = append(args, "--resume", *resumeID)
-	}
-	return args
 }
 
 func shortID(id string) string {
@@ -297,6 +382,9 @@ func (m *Model) handleKey(k tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case alt && k.Code == '-':
 		m.closeTab()
 		return m, nil
+	case alt && (k.Code == 'a' || k.Code == 'A'):
+		m.reselectAgent() // open the agent selector in a new tab
+		return m, nil
 	}
 
 	// Forward to the focused panel.
@@ -335,17 +423,12 @@ func (m *Model) handleKey(k tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 		tab := m.activeClaudeTab()
-		// While the session picker is active, keys go to it.
+		// While a selector (agent or session) is active, keys drive it.
 		if tab.picker != nil {
 			updated, chosen := tab.picker.Update(k)
 			*tab.picker = updated
 			if chosen != nil {
-				tab.picker = nil
-				if chosen.IsNew {
-					m.startClaudeTab(tab, nil)
-				} else {
-					m.startClaudeTab(tab, &chosen.ID)
-				}
+				m.selectInTab(tab, *chosen)
 			}
 			return m, nil
 		}
@@ -509,9 +592,9 @@ func (m *Model) startTerminals() {
 	for _, t := range m.terms {
 		_ = t.Start(m.prog)
 	}
-	// Each CLAUDE tab starts its process unless it is waiting on the selector.
+	// Each agent tab starts its process unless it is waiting on a selector.
 	for _, tab := range m.claudeTabs {
-		if tab.picker == nil {
+		if tab.mode == pickNone {
 			_ = tab.term.Start(m.prog)
 		}
 	}
@@ -569,26 +652,68 @@ func (m *Model) switchTerm(delta int) {
 	m.activeTerm = (m.activeTerm + delta + n) % n
 }
 
-// startClaudeTab launches claude-cli in tab (new session, or resuming resumeID).
-func (m *Model) startClaudeTab(tab *claudeTab, resumeID *string) {
+// selectInTab applies the user's choice in a tab's active selector: in agent
+// mode it sets the tab's agent (and the global default); in session mode it
+// launches Claude (resuming unless "New session" was chosen).
+func (m *Model) selectInTab(tab *claudeTab, choice picker.Item) {
+	switch tab.mode {
+	case pickAgent:
+		if agent, ok := m.findAgent(choice.ID); ok {
+			m.setDefaultAgent(agent)
+			m.configureTab(tab, agent)
+			if tab.mode == pickNone {
+				m.launchTab(tab, nil)
+			}
+		}
+	case pickSession:
+		if choice.IsNew {
+			m.launchTab(tab, nil)
+		} else {
+			m.launchTab(tab, &choice.ID)
+		}
+	}
+}
+
+// launchTab starts the tab's agent process. For Claude a non-empty resumeID
+// resumes that session; other agents ignore it.
+func (m *Model) launchTab(tab *claudeTab, resumeID *string) {
+	args := tab.agent.Args
+	if tab.agent.Bin == "claude" && resumeID != nil && *resumeID != "" {
+		args = append(append([]string{}, args...), "--resume", *resumeID)
+	}
+	tab.mode = pickNone
+	tab.picker = nil
 	if tab.term.Started() {
 		return
 	}
-	tab.term.SetArgs(claudeArgs(resumeID))
-	_ = tab.term.Start(m.prog)
+	tab.term.SetArgs(args)
+	if m.started {
+		_ = tab.term.Start(m.prog)
+	}
 }
 
-// newClaudeTab opens a new CLAUDE tab (on its session selector, or starting a
-// new session directly when the directory has none), and focuses it.
+// newClaudeTab opens a new agent tab using the default agent (or the agent
+// selector on first use), and focuses it.
 func (m *Model) newClaudeTab() {
 	tab := m.makeClaudeTab()
 	m.claudeTabs = append(m.claudeTabs, tab)
 	m.activeClaude = len(m.claudeTabs) - 1
 	m.focus = focusClaude
 	m.layout() // size the new tab before starting it
-	if m.started && tab.picker == nil {
+	if m.started && tab.mode == pickNone {
 		_ = tab.term.Start(m.prog)
 	}
+}
+
+// reselectAgent opens a new agent tab on the agent selector, so the user can
+// pick a different agent (which also becomes the new default).
+func (m *Model) reselectAgent() {
+	tab := &claudeTab{}
+	m.toAgentPicker(tab)
+	m.claudeTabs = append(m.claudeTabs, tab)
+	m.activeClaude = len(m.claudeTabs) - 1
+	m.focus = focusClaude
+	m.layout()
 }
 
 // closeClaudeTab closes the active CLAUDE tab. Closing the last remaining tab
@@ -623,13 +748,18 @@ func (m *Model) claudeTabByID(id int) *claudeTab {
 	return nil
 }
 
-// resetClaudeTabToMenu replaces a tab's claude process with a fresh terminal and
-// shows the session selector again (used when claude exits or the last tab is
-// closed).
+// resetClaudeTabToMenu replaces a tab's exited agent with a fresh terminal and
+// returns it to a selector (used when the agent exits or the last tab is
+// closed): Claude returns to its session menu, other agents to the agent picker.
 func (m *Model) resetClaudeTabToMenu(tab *claudeTab) {
 	tab.term.Close()
-	tab.term = terminal.New(m.allocID(), "CLAUDE", m.dir, claudeArgs(nil))
-	tab.picker = newSessionPicker(sessions.List(m.dir))
+	if tab.agent.Bin == "claude" {
+		tab.term = terminal.New(m.allocID(), strings.ToUpper(tab.agent.Name), m.dir, tab.agent.Args)
+		tab.picker = newSessionPicker(sessions.List(m.dir))
+		tab.mode = pickSession
+	} else {
+		m.toAgentPicker(tab)
+	}
 	m.layout()
 }
 
@@ -891,7 +1021,7 @@ func (m *Model) render() string {
 		claudeView = ctab.picker.View()
 	}
 	divider := hLine(m.rightInnerW)
-	claudeHeader := tabHeader("CLAUDE", len(m.claudeTabs), m.activeClaude, m.focus == focusClaude, m.rightInnerW)
+	claudeHeader := tabHeader(m.agentLabel(), len(m.claudeTabs), m.activeClaude, m.focus == focusClaude, m.rightInnerW)
 	claudeContent := blockRect(claudeView, m.rightInnerW, m.claudeInnerH)
 
 	var right string

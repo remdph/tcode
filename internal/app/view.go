@@ -172,7 +172,7 @@ func (m *Model) statusBar() string {
 	case focusSidebar:
 		focusName = "EXPLORER"
 	case focusClaude:
-		focusName = "CLAUDE"
+		focusName = m.agentLabel()
 	case focusTerminal:
 		focusName = "TERMINAL"
 	case focusGit:
@@ -215,7 +215,7 @@ func (m *Model) statusBar() string {
 	case m.autoHidden:
 		hints = " explorer hidden (window too narrow) · Ctrl+A Claude · Ctrl+Q quit"
 	default:
-		hints = " Ctrl+P open · Alt++/- tab · Alt+n switch · Ctrl+J newline · Ctrl+B/G/T sections · Ctrl+Q quit"
+		hints = " Ctrl+P open · Alt+A agent · Alt++/- tab · Alt+n switch · Ctrl+J newline · Ctrl+B/G/T sections"
 	}
 	rest := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("250")).

@@ -14,6 +14,51 @@ type Project struct {
 	GitWidth     int `json:"gitWidth,omitempty"`
 }
 
+// Global holds app-wide settings that are not tied to a project.
+type Global struct {
+	DefaultAgent string `json:"defaultAgent,omitempty"` // agent Bin, e.g. "claude"
+}
+
+// globalPath returns the app-wide config file path, or "" if home is unknown.
+func globalPath() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, ".config", "code-tui", "config.json")
+}
+
+// LoadGlobal reads the app-wide settings, returning a zero value when unset.
+func LoadGlobal() Global {
+	var g Global
+	file := globalPath()
+	if file == "" {
+		return g
+	}
+	data, err := os.ReadFile(file)
+	if err != nil {
+		return g
+	}
+	_ = json.Unmarshal(data, &g)
+	return g
+}
+
+// SaveGlobal writes the app-wide settings, creating the directory as needed.
+func SaveGlobal(g Global) error {
+	file := globalPath()
+	if file == "" {
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(g, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(file, data, 0o644)
+}
+
 // encodeDir turns a directory path into a safe file name (non-alphanumeric
 // characters become '-').
 func encodeDir(dir string) string {

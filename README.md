@@ -68,11 +68,37 @@ There are no outer borders: content reaches the window edges and only the
 internal seams are drawn (a vertical `│` between the explorer and the right
 column, and the `TERMINAL` header between the two right panels).
 
+### AI agents
+
+The agent panel is not limited to Claude Code. On startup code-tui **detects
+which coding-agent CLIs are installed** on your `PATH` and lets you pick one:
+
+- **First run** (or whenever several are installed and no default is saved): the
+  agent panel opens on a selector listing every detected agent. Your choice is
+  saved as the **default** (in `~/.config/code-tui/config.json`) and loaded
+  automatically afterwards.
+- **`Alt+A`** opens a new tab on that selector at any time, to switch agents; the
+  new choice becomes the default for future tabs.
+
+Detected agents (only those present on `PATH` are shown), each launched in its
+auto-approve / "yolo" mode where one is known:
+
+| Agent | Binary | Agent | Binary |
+|-------|--------|-------|--------|
+| Claude Code | `claude` | Aider | `aider` |
+| OpenAI Codex | `codex` | Cursor | `cursor-agent` |
+| Gemini | `gemini` | Amazon Q | `q` |
+| Grok (xAI) | `grok` | Qwen Code | `qwen` |
+| OpenCode | `opencode` | Crush | `crush` |
+| Goose | `goose` | GitHub Copilot | `copilot` |
+
+The launch flags live in `internal/agents/agents.go` and are easy to adjust.
+
 ### Claude sessions
 
-claude-cli always launches with `claude --dangerously-skip-permissions`. When
-the CLAUDE panel opens, code-tui looks for **past Claude Code sessions** for that
-directory (under `~/.claude/projects/<path>`):
+When the chosen agent is Claude, claude-cli launches with
+`claude --dangerously-skip-permissions` and code-tui looks for **past Claude Code
+sessions** for that directory (under `~/.claude/projects/<path>`):
 
 - If there are **none**, it starts a new session directly.
 - If there **are**, it shows a selector in the CLAUDE panel. The **first option
@@ -135,7 +161,8 @@ go run . /some/dir  # opens another directory
 
 | Key             | Action                                          |
 |-----------------|-------------------------------------------------|
-| `Ctrl+A`        | Focus the CLAUDE panel                          |
+| `Ctrl+A`        | Focus the agent (CLAUDE) panel                  |
+| `Alt+A`         | Open the agent selector (pick/switch AI agent)  |
 | `Ctrl+B`        | Explorer: show+focus / focus / hide             |
 | `Ctrl+G`        | Git panel: show+focus / focus / hide            |
 | `Ctrl+T`        | TERMINAL section: show+focus / focus / hide     |
