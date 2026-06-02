@@ -29,8 +29,12 @@ const (
 	focusGit
 )
 
-// claudeTermID is the fixed terminal id of the CLAUDE panel (terminals use 2+).
-const claudeTermID = 1
+// claudeTab is one tab of the CLAUDE section: a claude-cli terminal plus, until
+// a session is chosen, the session selector shown in its place.
+type claudeTab struct {
+	term   *terminal.Model
+	picker *picker.Model // session selector; nil once a session has been started
+}
 
 // Model is the root Bubble Tea model.
 type Model struct {
@@ -38,14 +42,19 @@ type Model struct {
 	width, height int
 
 	sidebar sidebar.Model
-	claude  *terminal.Model
+
+	// claudeTabs holds the CLAUDE tabs; activeClaude is the visible/focused one.
+	claudeTabs   []*claudeTab
+	activeClaude int
 
 	// terms holds the terminal tabs; activeTerm is the visible/focused one.
 	terms         []*terminal.Model
 	activeTerm    int
-	nextTermID    int
 	shell         string
 	showTerminals bool // the TERMINAL section is visible (Ctrl+T)
+
+	// nextID hands out unique terminal ids (claude tabs, terminal tabs, editor).
+	nextID int
 
 	focus        focus
 	sidebarPref  bool // what the user wants (Ctrl+B)
@@ -59,10 +68,6 @@ type Model struct {
 	gitWidth int // git panel width in columns (persisted per project)
 	started  bool
 	prog     *tea.Program
-
-	// picker is the session selector that occupies the CLAUDE panel until the
-	// user chooses; nil when there are no past sessions or one was already chosen.
-	picker *picker.Model
 
 	// editor is the floating editor overlay (nano/vi) while a file is open;
 	// nil otherwise.
@@ -111,21 +116,37 @@ func New(dir string) *Model {
 		focus:         focusClaude,
 		sidebar:       sidebar.New(dir),
 		gitPanel:      gitpanel.New(dir),
-		claude:        terminal.New(claudeTermID, "CLAUDE", dir, claudeArgs(nil)),
-		terms:         []*terminal.Model{terminal.New(2, "TERMINAL", dir, []string{shell})},
-		nextTermID:    3,
+		nextID:        1,
 	}
-
-	// If there are past sessions in this directory, a selector is shown in the
-	// CLAUDE panel; the first option is always to create a new session.
-	if past := sessions.List(dir); len(past) > 0 {
-		m.buildSessionPicker(past)
-	}
+	// One CLAUDE tab and one TERMINAL tab to start.
+	m.claudeTabs = []*claudeTab{m.makeClaudeTab()}
+	m.terms = []*terminal.Model{terminal.New(m.allocID(), "TERMINAL", dir, []string{shell})}
 	return m
 }
 
-// buildSessionPicker (re)builds the CLAUDE session selector from past.
-func (m *Model) buildSessionPicker(past []sessions.Session) {
+// allocID returns a fresh unique terminal id.
+func (m *Model) allocID() int {
+	id := m.nextID
+	m.nextID++
+	return id
+}
+
+// makeClaudeTab builds a CLAUDE tab. If the directory has past sessions it opens
+// on the session selector; otherwise it will start a new session directly.
+func (m *Model) makeClaudeTab() *claudeTab {
+	tab := &claudeTab{term: terminal.New(m.allocID(), "CLAUDE", m.dir, claudeArgs(nil))}
+	if past := sessions.List(m.dir); len(past) > 0 {
+		tab.picker = newSessionPicker(past)
+	}
+	return tab
+}
+
+// activeClaudeTab returns the visible/focused CLAUDE tab.
+func (m *Model) activeClaudeTab() *claudeTab { return m.claudeTabs[m.activeClaude] }
+
+// newSessionPicker builds the CLAUDE session selector from past sessions; the
+// first option is always to create a new session.
+func newSessionPicker(past []sessions.Session) *picker.Model {
 	items := []picker.Item{{Title: "New session", IsNew: true}}
 	for _, s := range past {
 		items = append(items, picker.Item{
@@ -135,7 +156,7 @@ func (m *Model) buildSessionPicker(past []sessions.Session) {
 		})
 	}
 	p := picker.New("Claude sessions in this directory — ↑/↓ and Enter:", items)
-	m.picker = &p
+	return &p
 }
 
 // claudeArgs builds the claude command. It always launches with
@@ -182,9 +203,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.editor.SendPaste(msg.Content)
 		case m.quickOpen != nil:
 			// the finder ignores pastes; nothing to do
-		case m.focus == focusClaude && m.picker == nil:
-			m.claude.ScrollToBottom()
-			m.claude.SendPaste(msg.Content)
+		case m.focus == focusClaude && m.activeClaudeTab().picker == nil:
+			tab := m.activeClaudeTab()
+			tab.term.ScrollToBottom()
+			tab.term.SendPaste(msg.Content)
 		case m.focus == focusTerminal:
 			m.activeTermModel().ScrollToBottom()
 			m.activeTermModel().SendPaste(msg.Content)
@@ -201,9 +223,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Closing the editor (e.g. quitting nano) dismisses the overlay.
 			m.editor.Close()
 			m.editor = nil
-		case msg.ID == claudeTermID:
-			// claude-cli exited (e.g. Ctrl+C to quit): return to the session menu.
-			m.reopenSessionMenu()
+		default:
+			// A claude-cli process exited (e.g. Ctrl+C to quit): that tab returns
+			// to its session menu. Terminal-tab exits are left as-is.
+			if tab := m.claudeTabByID(msg.ID); tab != nil {
+				m.resetClaudeTabToMenu(tab)
+			}
 		}
 		return m, nil
 
@@ -267,10 +292,10 @@ func (m *Model) handleKey(k tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.toggleTerminals()
 		return m, nil
 	case alt && (k.Code == '+' || k.Code == '='):
-		m.newTerminal() // '+' is Shift+'='; accept either
+		m.newTab() // '+' is Shift+'='; accept either
 		return m, nil
 	case alt && k.Code == '-':
-		m.closeTerminal()
+		m.closeTab()
 		return m, nil
 	}
 
@@ -290,16 +315,36 @@ func (m *Model) handleKey(k tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.sidebar, cmd = m.sidebar.Update(k)
 		return m, cmd
 	case focusClaude:
+		// Alt+<n> jumps to CLAUDE tab n; Alt+Shift+Left/Right cycle tabs (Shift
+		// is required for the arrows because many terminals reserve a bare
+		// Alt+Left/Right for word navigation).
+		if idx, ok := altTabIndex(k); ok {
+			if idx < len(m.claudeTabs) {
+				m.activeClaude = idx
+			}
+			return m, nil
+		}
+		if altHeld(k.Mod) && k.Mod.Contains(tea.ModShift) {
+			switch k.Code {
+			case tea.KeyLeft:
+				m.switchClaude(-1)
+				return m, nil
+			case tea.KeyRight:
+				m.switchClaude(1)
+				return m, nil
+			}
+		}
+		tab := m.activeClaudeTab()
 		// While the session picker is active, keys go to it.
-		if m.picker != nil {
-			updated, chosen := m.picker.Update(k)
-			*m.picker = updated
+		if tab.picker != nil {
+			updated, chosen := tab.picker.Update(k)
+			*tab.picker = updated
 			if chosen != nil {
-				m.picker = nil
+				tab.picker = nil
 				if chosen.IsNew {
-					m.startClaude(nil)
+					m.startClaudeTab(tab, nil)
 				} else {
-					m.startClaude(&chosen.ID)
+					m.startClaudeTab(tab, &chosen.ID)
 				}
 			}
 			return m, nil
@@ -310,25 +355,25 @@ func (m *Model) handleKey(k tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		// Shift+Enter is now distinguishable on any supporting terminal.
 		switch k.String() {
 		case "shift+enter", "ctrl+j", "alt+enter":
-			m.claude.ScrollToBottom()
-			m.claude.SendNewline()
+			tab.term.ScrollToBottom()
+			tab.term.SendNewline()
 			return m, nil
 		}
 		// PgUp/PgDn scroll the CLAUDE history (its scrollback buffer), unless an
 		// alt-screen program is running, in which case it does its own paging.
 		// Any other key snaps back to the live view before reaching the process.
-		if !m.claude.AltScreen() {
+		if !tab.term.AltScreen() {
 			switch k.Code {
 			case tea.KeyPgUp:
-				m.claude.ScrollPage(+1)
+				tab.term.ScrollPage(+1)
 				return m, nil
 			case tea.KeyPgDown:
-				m.claude.ScrollPage(-1)
+				tab.term.ScrollPage(-1)
 				return m, nil
 			}
 		}
-		m.claude.ScrollToBottom()
-		m.claude.SendKey(k)
+		tab.term.ScrollToBottom()
+		tab.term.SendKey(k)
 	case focusTerminal:
 		// Alt+Shift+Left/Right cycle tabs, Alt+<n> jumps to tab n, PgUp/PgDn
 		// scroll the history; every other key goes to the terminal (after
@@ -464,9 +509,29 @@ func (m *Model) startTerminals() {
 	for _, t := range m.terms {
 		_ = t.Start(m.prog)
 	}
-	// The shell always starts; claude only if there is no pending selector.
-	if m.picker == nil {
-		m.startClaude(nil)
+	// Each CLAUDE tab starts its process unless it is waiting on the selector.
+	for _, tab := range m.claudeTabs {
+		if tab.picker == nil {
+			_ = tab.term.Start(m.prog)
+		}
+	}
+}
+
+// newTab / closeTab act on the focused tabbed section: the CLAUDE tabs when it
+// is focused, otherwise the TERMINAL tabs.
+func (m *Model) newTab() {
+	if m.focus == focusClaude {
+		m.newClaudeTab()
+	} else {
+		m.newTerminal()
+	}
+}
+
+func (m *Model) closeTab() {
+	if m.focus == focusClaude {
+		m.closeClaudeTab()
+	} else {
+		m.closeTerminal()
 	}
 }
 
@@ -476,8 +541,7 @@ func (m *Model) activeTermModel() *terminal.Model { return m.terms[m.activeTerm]
 // newTerminal opens a new terminal tab, makes it active and focuses it.
 func (m *Model) newTerminal() {
 	m.showTerminals = true // creating a terminal reveals the section
-	t := terminal.New(m.nextTermID, "TERMINAL", m.dir, []string{m.shell})
-	m.nextTermID++
+	t := terminal.New(m.allocID(), "TERMINAL", m.dir, []string{m.shell})
 	m.terms = append(m.terms, t)
 	m.activeTerm = len(m.terms) - 1
 	m.focus = focusTerminal
@@ -499,28 +563,73 @@ func (m *Model) closeTerminal() {
 	}
 }
 
-// switchTerm moves the active tab by delta (wrapping around).
+// switchTerm moves the active terminal tab by delta (wrapping around).
 func (m *Model) switchTerm(delta int) {
 	n := len(m.terms)
 	m.activeTerm = (m.activeTerm + delta + n) % n
 }
 
-// startClaude launches claude-cli (new session, or resuming resumeID).
-func (m *Model) startClaude(resumeID *string) {
-	if m.claude.Started() {
+// startClaudeTab launches claude-cli in tab (new session, or resuming resumeID).
+func (m *Model) startClaudeTab(tab *claudeTab, resumeID *string) {
+	if tab.term.Started() {
 		return
 	}
-	m.claude.SetArgs(claudeArgs(resumeID))
-	_ = m.claude.Start(m.prog)
+	tab.term.SetArgs(claudeArgs(resumeID))
+	_ = tab.term.Start(m.prog)
 }
 
-// reopenSessionMenu is called when claude-cli exits: it replaces the dead CLAUDE
-// terminal with a fresh one and shows the session selector again.
-func (m *Model) reopenSessionMenu() {
-	m.claude.Close()
-	m.claude = terminal.New(claudeTermID, "CLAUDE", m.dir, claudeArgs(nil))
-	m.buildSessionPicker(sessions.List(m.dir))
+// newClaudeTab opens a new CLAUDE tab (on its session selector, or starting a
+// new session directly when the directory has none), and focuses it.
+func (m *Model) newClaudeTab() {
+	tab := m.makeClaudeTab()
+	m.claudeTabs = append(m.claudeTabs, tab)
+	m.activeClaude = len(m.claudeTabs) - 1
 	m.focus = focusClaude
+	m.layout() // size the new tab before starting it
+	if m.started && tab.picker == nil {
+		_ = tab.term.Start(m.prog)
+	}
+}
+
+// closeClaudeTab closes the active CLAUDE tab. Closing the last remaining tab
+// does not remove it; instead it returns that tab to its session menu.
+func (m *Model) closeClaudeTab() {
+	if len(m.claudeTabs) <= 1 {
+		m.resetClaudeTabToMenu(m.claudeTabs[0])
+		m.activeClaude = 0
+		return
+	}
+	m.claudeTabs[m.activeClaude].term.Close()
+	m.claudeTabs = append(m.claudeTabs[:m.activeClaude], m.claudeTabs[m.activeClaude+1:]...)
+	if m.activeClaude >= len(m.claudeTabs) {
+		m.activeClaude = len(m.claudeTabs) - 1
+	}
+	m.layout()
+}
+
+// switchClaude moves the active CLAUDE tab by delta (wrapping around).
+func (m *Model) switchClaude(delta int) {
+	n := len(m.claudeTabs)
+	m.activeClaude = (m.activeClaude + delta + n) % n
+}
+
+// claudeTabByID returns the CLAUDE tab whose terminal has the given id, or nil.
+func (m *Model) claudeTabByID(id int) *claudeTab {
+	for _, tab := range m.claudeTabs {
+		if tab.term.ID() == id {
+			return tab
+		}
+	}
+	return nil
+}
+
+// resetClaudeTabToMenu replaces a tab's claude process with a fresh terminal and
+// shows the session selector again (used when claude exits or the last tab is
+// closed).
+func (m *Model) resetClaudeTabToMenu(tab *claudeTab) {
+	tab.term.Close()
+	tab.term = terminal.New(m.allocID(), "CLAUDE", m.dir, claudeArgs(nil))
+	tab.picker = newSessionPicker(sessions.List(m.dir))
 	m.layout()
 }
 
@@ -542,7 +651,9 @@ func (m *Model) toggleTerminals() {
 }
 
 func (m *Model) cleanup() {
-	m.claude.Close()
+	for _, tab := range m.claudeTabs {
+		tab.term.Close()
+	}
 	for _, t := range m.terms {
 		t.Close()
 	}
@@ -573,8 +684,7 @@ func (m *Model) openEditor(path string) {
 	if args == nil {
 		return // neither nano nor vi available
 	}
-	m.editorID = m.nextTermID
-	m.nextTermID++
+	m.editorID = m.allocID()
 	m.editor = terminal.New(m.editorID, filepath.Base(path), m.dir, args)
 	m.editor.SetFocused(true) // the editor always shows its cursor
 	m.editorName = filepath.Base(path)
@@ -721,7 +831,12 @@ func (m *Model) layout() {
 	}
 
 	m.sidebar.SetSize(max(sbW, 1), max(m.sbInnerH, 1))
-	m.claude.SetSize(max(rightW, 1), max(m.claudeInnerH, 1))
+	for _, tab := range m.claudeTabs {
+		tab.term.SetSize(max(rightW, 1), max(m.claudeInnerH, 1))
+		if tab.picker != nil {
+			tab.picker.SetSize(max(rightW, 1), max(m.claudeInnerH, 1))
+		}
+	}
 	if m.showTerminals {
 		for _, t := range m.terms {
 			t.SetSize(max(rightW, 1), max(m.termInnerH, 1))
@@ -734,9 +849,6 @@ func (m *Model) layout() {
 	if m.quickOpen != nil {
 		qw, qh := m.quickOpenDims()
 		m.quickOpen.SetSize(qw, qh)
-	}
-	if m.picker != nil {
-		m.picker.SetSize(max(rightW, 1), max(m.claudeInnerH, 1))
 	}
 	if m.showGit {
 		m.gitPanel.SetSize(max(gitW, 1), max(m.gitInnerH, 1))
@@ -770,16 +882,16 @@ func (m *Model) render() string {
 
 	bodyH := m.height - 1
 
-	// Right column: CLAUDE on top, TERMINAL below. The TERMINAL label uses the
-	// same header style as the others. If the session picker is active, it
-	// takes over the CLAUDE area.
-	m.claude.SetFocused(m.focus == focusClaude)
-	claudeView := m.claude.View()
-	if m.picker != nil {
-		claudeView = m.picker.View()
+	// Right column: CLAUDE on top, TERMINAL below, each with a tabbed header. If
+	// the active CLAUDE tab's session selector is active, it takes over that area.
+	ctab := m.activeClaudeTab()
+	ctab.term.SetFocused(m.focus == focusClaude)
+	claudeView := ctab.term.View()
+	if ctab.picker != nil {
+		claudeView = ctab.picker.View()
 	}
 	divider := hLine(m.rightInnerW)
-	claudeHeader := headerLabel(m.claude.Name(), m.focus == focusClaude, m.rightInnerW)
+	claudeHeader := tabHeader("CLAUDE", len(m.claudeTabs), m.activeClaude, m.focus == focusClaude, m.rightInnerW)
 	claudeContent := blockRect(claudeView, m.rightInnerW, m.claudeInnerH)
 
 	var right string
@@ -787,7 +899,7 @@ func (m *Model) render() string {
 	if m.showTerminals {
 		at := m.activeTermModel()
 		at.SetFocused(m.focus == focusTerminal)
-		termHeader := terminalHeader(len(m.terms), m.activeTerm, m.focus == focusTerminal, m.rightInnerW)
+		termHeader := tabHeader("TERMINAL", len(m.terms), m.activeTerm, m.focus == focusTerminal, m.rightInnerW)
 		termContent := blockRect(at.View(), m.rightInnerW, m.termInnerH)
 		right = lipgloss.JoinVertical(lipgloss.Left,
 			divider, // above CLAUDE title

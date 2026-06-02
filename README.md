@@ -82,8 +82,14 @@ directory (under `~/.claude/projects/<path>`):
 
   Navigate with `↑/↓` (or `j/k`) and confirm with `Enter`.
 
-When claude-cli exits (e.g. you quit it with `Ctrl+C`), the CLAUDE panel returns
-to this session menu so you can start or resume another session.
+When claude-cli exits (e.g. you quit it with `Ctrl+C`), that tab returns to this
+session menu so you can start or resume another session.
+
+The CLAUDE section supports **multiple tabs**, exactly like the TERMINAL section.
+With CLAUDE focused, `Alt++` opens a new tab (each starts on its own session
+menu), `Alt+-` closes the current one, `Alt+<n>` jumps to tab *n*, and
+`Alt+Shift+←/→` cycle. Closing the **last** remaining tab does not remove it —
+it returns that tab to the session menu.
 
 ## Install
 
@@ -134,10 +140,10 @@ go run . /some/dir  # opens another directory
 | `Ctrl+G`        | Git panel: show+focus / focus / hide            |
 | `Ctrl+T`        | TERMINAL section: show+focus / focus / hide     |
 | `Ctrl+P`        | Open the fuzzy file finder (quick open)         |
-| `Alt+1…0`       | Switch to tab 1…10 of the focused section (terminal) |
-| `Alt+Shift+←` / `Alt+Shift+→` | Cycle tabs of the focused section (terminal) |
-| `Alt++`         | Open a new terminal tab (and focus it)          |
-| `Alt+-`         | Close the current terminal tab (keeps one)      |
+| `Alt+1…0`       | Switch to tab 1…10 of the focused section (CLAUDE or terminal) |
+| `Alt+Shift+←` / `Alt+Shift+→` | Cycle tabs of the focused section        |
+| `Alt++`         | Open a new tab in the focused section (CLAUDE or terminal) |
+| `Alt+-`         | Close the current tab (CLAUDE's last tab returns to its menu) |
 | `Shift+Enter`   | Insert a newline in the CLAUDE prompt (multiline) |
 | `Ctrl+J`        | Insert a newline in the CLAUDE prompt (multiline) |
 | `PgUp` / `PgDn` | Scroll the CLAUDE / terminal history (scrollback) |
@@ -157,11 +163,13 @@ three states:
    the section.
 3. **Visible and focused** → it is hidden, and focus returns to CLAUDE.
 
-The TERMINAL section supports multiple tabs, shown next to its label (the active
-one is highlighted with the accent color). Each tab is an independent shell.
-With TERMINAL focused, switch tabs with `Alt+<n>` (jump straight to tab *n*) or
-cycle with `Alt+Shift+←/→`; `Alt++` / `Alt+-` open and close tabs. The shells
-keep running while the section is hidden.
+Both the **CLAUDE** and **TERMINAL** sections support multiple tabs, shown next
+to the section label (the active one is highlighted with the accent color). The
+tab shortcuts always act on the **focused** section: switch with `Alt+<n>` (jump
+to tab *n*) or cycle with `Alt+Shift+←/→`, and `Alt++` / `Alt+-` open and close
+tabs. Terminal tabs are independent shells; CLAUDE tabs are independent
+claude-cli sessions (closing the last CLAUDE tab returns it to the session menu
+rather than removing it). Everything keeps running while a section is hidden.
 
 ### Multiline input to Claude
 

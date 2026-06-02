@@ -82,10 +82,10 @@ func (m *Model) quickOpenView() string {
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, box)
 }
 
-// terminalHeader draws the TERMINAL label followed by one tab chip per open
-// terminal. The active tab is highlighted with the theme accent; the label is
-// accent-colored when the panel is focused.
-func terminalHeader(count, active int, focused bool, w int) string {
+// tabHeader draws a section label followed by one numbered chip per open tab.
+// The active tab is highlighted with the theme accent; the label is
+// accent-colored when the panel is focused. Used for both CLAUDE and TERMINAL.
+func tabHeader(label string, count, active int, focused bool, w int) string {
 	if w < 1 {
 		w = 1
 	}
@@ -93,7 +93,7 @@ func terminalHeader(count, active int, focused bool, w int) string {
 	if focused {
 		labelStyle = labelStyle.Foreground(theme.Accent)
 	}
-	parts := []string{labelStyle.Render(" TERMINAL ")}
+	parts := []string{labelStyle.Render(" " + label + " ")}
 	for i := 0; i < count; i++ {
 		chip := fmt.Sprintf(" %d ", i+1)
 		if i == active {
@@ -156,8 +156,8 @@ func blockRect(content string, w, h int) string {
 func (m *Model) focusedScroll() *terminal.Model {
 	switch m.focus {
 	case focusClaude:
-		if m.picker == nil {
-			return m.claude
+		if tab := m.activeClaudeTab(); tab.picker == nil {
+			return tab.term
 		}
 	case focusTerminal:
 		return m.activeTermModel()
@@ -215,7 +215,7 @@ func (m *Model) statusBar() string {
 	case m.autoHidden:
 		hints = " explorer hidden (window too narrow) · Ctrl+A Claude · Ctrl+Q quit"
 	default:
-		hints = " Ctrl+P open · Ctrl+A Claude · Ctrl+B explorer · Ctrl+G git · Ctrl+T terminals · Ctrl+J newline"
+		hints = " Ctrl+P open · Alt++/- tab · Alt+n switch · Ctrl+J newline · Ctrl+B/G/T sections · Ctrl+Q quit"
 	}
 	rest := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("250")).

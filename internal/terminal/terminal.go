@@ -71,6 +71,9 @@ func New(id int, name, dir string, args []string) *Model {
 // Name returns the panel label.
 func (m *Model) Name() string { return m.name }
 
+// ID returns the panel's unique terminal id (used to route Exit/Refresh events).
+func (m *Model) ID() int { return m.id }
+
 // SetArgs sets the command to run. It only has effect if called before Start.
 func (m *Model) SetArgs(args []string) { m.args = args }
 
