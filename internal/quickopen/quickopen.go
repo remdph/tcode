@@ -11,7 +11,7 @@ import (
 
 	"code-tui/internal/theme"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -96,32 +96,35 @@ func (m *Model) SetSize(w, h int) { m.width, m.height = w, h }
 // Update processes a key. It returns the updated model and, when the user
 // finishes, an outcome: open is the absolute path to open (empty otherwise),
 // and cancelled is true when the finder should close without opening anything.
-func (m Model) Update(k tea.KeyMsg) (_ Model, open string, cancelled bool) {
-	switch k.Type {
-	case tea.KeyEsc, tea.KeyCtrlC:
+func (m Model) Update(k tea.KeyPressMsg) (_ Model, open string, cancelled bool) {
+	switch k.String() {
+	case "esc", "ctrl+c":
 		return m, "", true
-	case tea.KeyEnter:
+	case "enter":
 		if p, ok := m.currentPath(); ok {
 			return m, p, false
 		}
-	case tea.KeyUp, tea.KeyCtrlP, tea.KeyCtrlK:
+	case "up", "ctrl+p", "ctrl+k":
 		m.moveCursor(-1)
-	case tea.KeyDown, tea.KeyCtrlN, tea.KeyCtrlJ:
+	case "down", "ctrl+n", "ctrl+j":
 		m.moveCursor(1)
-	case tea.KeyBackspace:
+	case "backspace":
 		if n := len(m.query); n > 0 {
 			m.query = m.query[:n-1]
 			m.refilter()
 		}
-	case tea.KeyCtrlU:
+	case "ctrl+u":
 		m.query = m.query[:0]
 		m.refilter()
-	case tea.KeySpace:
+	case "space":
 		m.query = append(m.query, ' ')
 		m.refilter()
-	case tea.KeyRunes:
-		m.query = append(m.query, k.Runes...)
-		m.refilter()
+	default:
+		// A printable character (no control/alt modifier) extends the query.
+		if k.Text != "" && k.Mod&(tea.ModCtrl|tea.ModAlt|tea.ModSuper|tea.ModMeta) == 0 {
+			m.query = append(m.query, []rune(k.Text)...)
+			m.refilter()
+		}
 	}
 	m.ensureVisible()
 	return m, "", false

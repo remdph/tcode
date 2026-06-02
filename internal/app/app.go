@@ -15,7 +15,7 @@ import (
 	"code-tui/internal/sidebar"
 	"code-tui/internal/terminal"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -171,8 +171,24 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		return m.handleKey(msg)
+
+	case tea.PasteMsg:
+		// Bracketed-paste content is routed to whatever currently takes input.
+		switch {
+		case m.editor != nil:
+			m.editor.SendPaste(msg.Content)
+		case m.quickOpen != nil:
+			// the finder ignores pastes; nothing to do
+		case m.focus == focusClaude && m.picker == nil:
+			m.claude.ScrollToBottom()
+			m.claude.SendPaste(msg.Content)
+		case m.focus == focusTerminal:
+			m.activeTermModel().ScrollToBottom()
+			m.activeTermModel().SendPaste(msg.Content)
+		}
+		return m, nil
 
 	case sidebar.OpenFileMsg:
 		m.openEditor(msg.Path)
@@ -197,7 +213,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m *Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *Model) handleKey(k tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// While the floating editor is open, every key goes to it; it closes on its
 	// own exit (Ctrl+X in nano, :q in vi).
 	if m.editor != nil {
@@ -221,39 +237,47 @@ func (m *Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	// Global shortcuts (intercepted before forwarding to the focused panel).
+	// Ctrl/Super combos are matched by their keystroke string (their Text is
+	// empty so String() is reliable); Alt combos are matched on Code+Mod because
+	// some terminals populate Text for Alt+printable, which would shadow the
+	// keystroke form.
+	// altOnly is Alt without Shift, so the Alt+<digit> focus shortcuts don't
+	// collide with the Alt+Shift+<digit> terminal-tab shortcuts.
+	altOnly := k.Mod == tea.ModAlt
+	alt := k.Mod.Contains(tea.ModAlt)
 	switch {
-	case k.Type == tea.KeyCtrlQ:
+	case k.String() == "ctrl+q":
 		m.cleanup()
 		return m, tea.Quit
-	case k.Type == tea.KeyCtrlP || k.String() == "super+p":
+	case k.String() == "ctrl+p", k.String() == "super+p":
 		m.openQuickOpen()
 		return m, nil
-	case k.String() == "ctrl+b" || k.String() == "super+b":
+	case k.String() == "ctrl+b", k.String() == "super+b":
 		m.toggleSidebar()
 		return m, nil
-	case k.Type == tea.KeyCtrlG:
+	case k.String() == "ctrl+g":
 		m.toggleGit()
 		return m, nil
-	case k.Type == tea.KeyCtrlT:
+	case k.String() == "ctrl+t":
 		m.toggleTerminals()
 		return m, nil
-	case k.Alt && runeIs(k, '1'):
+	case altOnly && k.Code == '1':
 		m.focus = focusClaude
 		return m, nil
-	case k.Alt && runeIs(k, '2'):
+	case altOnly && k.Code == '2':
 		if m.showTerminals {
 			m.focus = focusTerminal
 		}
 		return m, nil
-	case k.Alt && runeIs(k, '3'):
+	case altOnly && k.Code == '3':
 		if m.showSidebar {
 			m.focus = focusSidebar
 		}
 		return m, nil
-	case k.Alt && (runeIs(k, '+') || runeIs(k, '=')):
-		m.newTerminal() // '=' shares the key with '+'
+	case alt && (k.Code == '+' || k.Code == '='):
+		m.newTerminal() // '+' is Shift+'='; accept either
 		return m, nil
-	case k.Alt && runeIs(k, '-'):
+	case alt && k.Code == '-':
 		m.closeTerminal()
 		return m, nil
 	}
@@ -288,10 +312,12 @@ func (m *Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
-		// Insert a newline in claude's prompt (instead of submitting) on Ctrl+J or
-		// Alt/Option+Enter — and on Shift+Enter when the host terminal is set to
-		// send LF for it. Plain Enter still submits.
-		if k.Type == tea.KeyCtrlJ || (k.Type == tea.KeyEnter && k.Alt) {
+		// Insert a newline in claude's prompt (instead of submitting) on
+		// Shift+Enter, Ctrl+J or Alt/Option+Enter. Plain Enter still submits.
+		// With the kitty keyboard protocol (negotiated by Bubble Tea v2),
+		// Shift+Enter is now distinguishable on any supporting terminal.
+		switch k.String() {
+		case "shift+enter", "ctrl+j", "alt+enter":
 			m.claude.ScrollToBottom()
 			m.claude.SendNewline()
 			return m, nil
@@ -300,7 +326,7 @@ func (m *Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// alt-screen program is running, in which case it does its own paging.
 		// Any other key snaps back to the live view before reaching the process.
 		if !m.claude.AltScreen() {
-			switch k.Type {
+			switch k.Code {
 			case tea.KeyPgUp:
 				m.claude.ScrollPage(+1)
 				return m, nil
@@ -316,13 +342,13 @@ func (m *Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// scroll the history; every other key goes to the terminal (after
 		// snapping back to the live view).
 		switch {
-		case k.Alt && k.Type == tea.KeyLeft:
+		case k.Mod.Contains(tea.ModAlt) && k.Code == tea.KeyLeft:
 			m.switchTerm(-1)
-		case k.Alt && k.Type == tea.KeyRight:
+		case k.Mod.Contains(tea.ModAlt) && k.Code == tea.KeyRight:
 			m.switchTerm(1)
-		case k.Type == tea.KeyPgUp && !m.activeTermModel().AltScreen():
+		case k.Code == tea.KeyPgUp && !m.activeTermModel().AltScreen():
 			m.activeTermModel().ScrollPage(+1)
-		case k.Type == tea.KeyPgDown && !m.activeTermModel().AltScreen():
+		case k.Code == tea.KeyPgDown && !m.activeTermModel().AltScreen():
 			m.activeTermModel().ScrollPage(-1)
 		default:
 			if idx, ok := altTabIndex(k); ok {
@@ -351,19 +377,23 @@ func (m *Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func runeIs(k tea.KeyMsg, r rune) bool {
-	return len(k.Runes) == 1 && k.Runes[0] == r
-}
-
 // altTabIndex maps an Alt+Shift+<digit> press to a 0-based terminal tab index.
-// Bubble Tea reports the shifted rune rather than a modifier, so this matches
-// the US-layout shifted digits (!@#$%^&*() for 1-9 and 0). ok is false for any
-// other key.
-func altTabIndex(k tea.KeyMsg) (int, bool) {
-	if !k.Alt || len(k.Runes) != 1 {
+// With the kitty keyboard protocol the digit is reported directly (Code is the
+// unshifted '1'..'0' with ModAlt|ModShift); on terminals without it the press
+// arrives as Alt + the US-layout shifted symbol (!@#$…). ok is false otherwise.
+func altTabIndex(k tea.KeyPressMsg) (int, bool) {
+	if !k.Mod.Contains(tea.ModAlt) {
 		return 0, false
 	}
-	switch k.Runes[0] {
+	if k.Mod.Contains(tea.ModShift) {
+		switch k.Code {
+		case '1', '2', '3', '4', '5', '6', '7', '8', '9':
+			return int(k.Code - '1'), true
+		case '0':
+			return 9, true
+		}
+	}
+	switch k.Code { // legacy fallback: Alt + shifted symbol
 	case '!':
 		return 0, true
 	case '@':
@@ -672,8 +702,17 @@ func (m *Model) layout() {
 	}
 }
 
-// View implements tea.Model.
-func (m *Model) View() string {
+// View implements tea.Model. It requests the alternate screen and renders the
+// current UI; AltScreen on the View is what puts the program in full-window mode
+// in Bubble Tea v2 (there is no WithAltScreen program option).
+func (m *Model) View() tea.View {
+	v := tea.NewView(m.render())
+	v.AltScreen = true
+	return v
+}
+
+// render builds the full-screen UI as a styled string.
+func (m *Model) render() string {
 	if m.width == 0 {
 		return "Starting code-tui…"
 	}

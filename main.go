@@ -20,7 +20,7 @@ import (
 	"code-tui/internal/recents"
 	"code-tui/internal/theme"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 // version is the current release of code-tui (installed as `tcode`).
@@ -71,7 +71,7 @@ func main() {
 	recents.Add(dir)
 
 	m := app.New(dir)
-	p := tea.NewProgram(m, tea.WithAltScreen())
+	p := tea.NewProgram(m)
 	m.SetProgram(p)
 
 	if _, err := p.Run(); err != nil {
@@ -84,7 +84,7 @@ func main() {
 // ("", false) if the user cancelled.
 func runLauncher(execDir string) (string, bool) {
 	m := launcher.New(execDir, recents.List())
-	res, err := tea.NewProgram(m, tea.WithAltScreen()).Run()
+	res, err := tea.NewProgram(m).Run()
 	if err != nil {
 		return "", false
 	}

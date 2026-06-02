@@ -7,7 +7,7 @@ import (
 
 	"code-tui/internal/theme"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -54,7 +54,7 @@ func (m *Model) SetSize(w, h int) {
 
 // Update handles navigation. It returns the chosen item when the user confirms
 // with Enter (nil otherwise).
-func (m Model) Update(k tea.KeyMsg) (Model, *Item) {
+func (m Model) Update(k tea.KeyPressMsg) (Model, *Item) {
 	switch k.String() {
 	case "up", "k", "ctrl+p":
 		if m.cursor > 0 {

@@ -9,7 +9,7 @@ import (
 
 	"code-tui/internal/picker"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -51,7 +51,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width, m.height = msg.Width, msg.Height
 		m.picker.SetSize(min(msg.Width-4, 72), msg.Height-2)
 		return m, nil
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "ctrl+c", "esc", "q":
 			return m, tea.Quit
@@ -68,9 +68,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // View implements tea.Model.
-func (m Model) View() string {
+func (m Model) View() tea.View {
+	v := tea.NewView("")
+	v.AltScreen = true
 	if m.width == 0 {
-		return ""
+		return v
 	}
 	content := m.picker.View()
 	// Show the T-CODE logo above the selector when there is room for it.
@@ -78,7 +80,8 @@ func (m Model) View() string {
 		content = lipgloss.JoinVertical(lipgloss.Center, banner(), "", m.picker.View())
 	}
 	box := lipgloss.NewStyle().Padding(1, 2).Render(content)
-	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, box)
+	v.SetContent(lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, box))
+	return v
 }
 
 // Chosen returns the selected directory, or "" if the user cancelled.

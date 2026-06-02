@@ -8,7 +8,7 @@ import (
 	"os/exec"
 	"sync"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/vt"
 	"github.com/creack/pty"
@@ -218,7 +218,7 @@ func (m *Model) Scrolled() bool { return m.scrollOff > 0 }
 func (m *Model) ScrollOffset() int { return m.scrollOff }
 
 // SendKey translates a Bubble Tea key press to bytes and sends it to the PTY.
-func (m *Model) SendKey(k tea.KeyMsg) {
+func (m *Model) SendKey(k tea.KeyPressMsg) {
 	if m.ptmx == nil {
 		return
 	}
@@ -234,6 +234,16 @@ func (m *Model) SendNewline() {
 		return
 	}
 	_, _ = m.ptmx.Write([]byte{0x1b, '\r'})
+}
+
+// SendPaste delivers pasted text to the process. The emulator wraps it in
+// bracketed-paste markers if the program enabled that mode (DECSET 2004), so a
+// multi-line paste is handled atomically rather than submitting on each newline.
+func (m *Model) SendPaste(text string) {
+	if m.emu == nil || m.dead {
+		return // a dead process has no pipe reader; the write would block
+	}
+	m.emu.Paste(text)
 }
 
 // View renders the emulator screen as a string with ANSI styling. When the

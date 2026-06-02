@@ -6,7 +6,7 @@
 (TUI): a file explorer on one side, **Claude Code** running in one pane, and one
 or more **virtual terminals** in another — all arranged in a tidy, keyboard-driven
 layout, with a Git panel and a project launcher. It is written in Go with
-[Bubble Tea](https://github.com/charmbracelet/bubbletea) and rendered through a
+[Bubble Tea v2](https://github.com/charmbracelet/bubbletea) and rendered through a
 real terminal emulator, so the panes are genuine PTYs, not fake text boxes.
 
 Think of it as a lightweight "IDE shell" whose primary tenant is **Claude Code**:
@@ -140,6 +140,7 @@ go run . /some/dir  # opens another directory
 | `Alt+-`         | Close the current terminal tab (keeps one)      |
 | `Alt+←` / `Alt+→` | Cycle terminal tabs (when TERMINAL focused)    |
 | `Alt+Shift+1…0` | Jump to terminal tab 1…10 (when TERMINAL focused) |
+| `Shift+Enter`   | Insert a newline in the CLAUDE prompt (multiline) |
 | `Ctrl+J`        | Insert a newline in the CLAUDE prompt (multiline) |
 | `PgUp` / `PgDn` | Scroll the CLAUDE / terminal history (scrollback) |
 | `.`             | Toggle hidden dotfiles (when the explorer is focused) |
@@ -159,11 +160,13 @@ hidden.
 ### Multiline input to Claude
 
 Plain `Enter` submits your message to Claude. To insert a **newline** instead
-(for a multi-line prompt), press `Ctrl+J`, or `Alt`/`Option`+`Enter`. Bubble Tea
-(the input layer) cannot see a bare `Shift+Enter` — most terminals send the same
-byte for `Enter` and `Shift+Enter` — so if you want `Shift+Enter` specifically,
-bind it in your terminal emulator to send a line feed (`\n`, i.e. `Ctrl+J`) or
-the escape sequence `\e\r`; tcode then turns that into a Claude newline.
+(for a multi-line prompt), press `Shift+Enter`, `Ctrl+J`, or `Alt`/`Option`+`Enter`.
+
+`Shift+Enter` works terminal-agnostically: tcode is built on **Bubble Tea v2**,
+which negotiates the [kitty keyboard protocol](https://sw.kovidgoyal.net/kitty/keyboard-protocol/)
+with the host terminal on startup, so a modified `Enter` becomes distinguishable
+from a plain one. On terminals that don't support the protocol, `Shift+Enter`
+falls back to behaving like `Enter`; use `Ctrl+J` there.
 
 The **Git panel** (`Ctrl+G`) opens on the right and has two tabs, switched with
 `Tab` (or `←/→`):

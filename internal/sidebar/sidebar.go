@@ -10,7 +10,7 @@ import (
 
 	"code-tui/internal/theme"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -136,7 +136,7 @@ func (m *Model) SetSize(w, h int) {
 
 // Update handles navigation when the explorer is focused. Pressing Enter on a
 // file returns a command that emits OpenFileMsg.
-func (m Model) Update(k tea.KeyMsg) (Model, tea.Cmd) {
+func (m Model) Update(k tea.KeyPressMsg) (Model, tea.Cmd) {
 	var cmd tea.Cmd
 	switch k.String() {
 	case "up", "k":

@@ -9,7 +9,7 @@ import (
 
 	"code-tui/internal/theme"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -131,7 +131,7 @@ func parseCommits(out string) []commit {
 }
 
 // Update handles navigation when the panel is focused.
-func (m Model) Update(k tea.KeyMsg) (Model, tea.Cmd) {
+func (m Model) Update(k tea.KeyPressMsg) (Model, tea.Cmd) {
 	switch k.String() {
 	case "up", "k", "ctrl+p":
 		if m.cursor > 0 {
