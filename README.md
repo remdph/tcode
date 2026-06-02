@@ -138,7 +138,7 @@ go run . /some/dir  # opens another directory
 | `Alt+3`         | Focus the explorer (when visible)               |
 | `Alt++`         | Open a new terminal tab (and focus it)          |
 | `Alt+-`         | Close the current terminal tab (keeps one)      |
-| `Alt+←` / `Alt+→` | Cycle terminal tabs (when TERMINAL focused)    |
+| `Alt+Shift+←` / `Alt+Shift+→` | Cycle terminal tabs (when TERMINAL focused) |
 | `Alt+Shift+1…0` | Jump to terminal tab 1…10 (when TERMINAL focused) |
 | `Shift+Enter`   | Insert a newline in the CLAUDE prompt (multiline) |
 | `Ctrl+J`        | Insert a newline in the CLAUDE prompt (multiline) |
@@ -152,7 +152,7 @@ the CLAUDE panel, which is never hidden.
 
 The TERMINAL panel supports multiple tabs, shown next to its label (the active
 one is highlighted with the accent color). Each tab is an independent shell.
-Cycle through them with `Alt+←/→`, or jump straight to one with `Alt+Shift+<n>`
+Cycle through them with `Alt+Shift+←/→`, or jump straight to one with `Alt+Shift+<n>`
 (`Alt+Shift+1` for the first tab, and so on). `Ctrl+T` hides or shows the whole
 TERMINAL section (giving CLAUDE the full height); the shells keep running while
 hidden.

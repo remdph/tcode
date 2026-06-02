@@ -341,13 +341,15 @@ func (m *Model) handleKey(k tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.claude.ScrollToBottom()
 		m.claude.SendKey(k)
 	case focusTerminal:
-		// Alt+Left/Right cycle tabs, Alt+Shift+<n> jumps to tab n, PgUp/PgDn
+		// Alt+Shift+Left/Right cycle tabs, Alt+Shift+<n> jumps to tab n, PgUp/PgDn
 		// scroll the history; every other key goes to the terminal (after
-		// snapping back to the live view).
+		// snapping back to the live view). Shift is required because many
+		// terminals reserve a bare Alt+Left/Right for word navigation.
+		shift := k.Mod.Contains(tea.ModShift)
 		switch {
-		case altHeld(k.Mod) && k.Code == tea.KeyLeft:
+		case altHeld(k.Mod) && shift && k.Code == tea.KeyLeft:
 			m.switchTerm(-1)
-		case altHeld(k.Mod) && k.Code == tea.KeyRight:
+		case altHeld(k.Mod) && shift && k.Code == tea.KeyRight:
 			m.switchTerm(1)
 		case k.Code == tea.KeyPgUp && !m.activeTermModel().AltScreen():
 			m.activeTermModel().ScrollPage(+1)

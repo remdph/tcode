@@ -209,7 +209,7 @@ func (m *Model) statusBar() string {
 	case m.focus == focusSidebar:
 		hints = " ↑/↓ move · Enter open · . dotfiles · +/- width · Ctrl+B hide · Ctrl+Q quit"
 	case m.focus == focusTerminal:
-		hints = " Alt++ new · Alt+- close · Alt+←/→ or Alt+Shift+n switch · PgUp/PgDn scroll · Alt+1 Claude"
+		hints = " Alt++ new · Alt+- close · Alt+Shift+←/→ or Alt+Shift+n switch · PgUp/PgDn scroll · Alt+1 Claude"
 	case m.focus == focusGit:
 		hints = " ↑/↓ move · Tab CHANGES/HISTORY · r refresh · +/- width · Ctrl+G hide"
 	case m.autoHidden:
