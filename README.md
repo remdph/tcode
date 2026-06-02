@@ -138,18 +138,32 @@ go run . /some/dir  # opens another directory
 | `Alt+3`         | Focus the explorer (when visible)               |
 | `Alt++`         | Open a new terminal tab (and focus it)          |
 | `Alt+-`         | Close the current terminal tab (keeps one)      |
-| `Alt+←` / `Alt+→` | Switch terminal tab (only when TERMINAL focused) |
+| `Alt+←` / `Alt+→` | Cycle terminal tabs (when TERMINAL focused)    |
+| `Alt+Shift+1…0` | Jump to terminal tab 1…10 (when TERMINAL focused) |
+| `Ctrl+J`        | Insert a newline in the CLAUDE prompt (multiline) |
 | `PgUp` / `PgDn` | Scroll the CLAUDE / terminal history (scrollback) |
 | `.`             | Toggle hidden dotfiles (when the explorer is focused) |
 | `Ctrl+Q`        | Quit                                            |
 
-Showing the explorer with `Ctrl+B` moves focus to it; hiding it returns focus to
-CLAUDE.
+Revealing the explorer (`Ctrl+B`), the Git panel (`Ctrl+G`) or the TERMINAL
+section (`Ctrl+T`) moves focus **to** that section; hiding it returns focus to
+the CLAUDE panel, which is never hidden.
 
 The TERMINAL panel supports multiple tabs, shown next to its label (the active
 one is highlighted with the accent color). Each tab is an independent shell.
-`Ctrl+T` hides or shows the whole TERMINAL section (giving CLAUDE the full
-height); the shells keep running while hidden.
+Cycle through them with `Alt+←/→`, or jump straight to one with `Alt+Shift+<n>`
+(`Alt+Shift+1` for the first tab, and so on). `Ctrl+T` hides or shows the whole
+TERMINAL section (giving CLAUDE the full height); the shells keep running while
+hidden.
+
+### Multiline input to Claude
+
+Plain `Enter` submits your message to Claude. To insert a **newline** instead
+(for a multi-line prompt), press `Ctrl+J`, or `Alt`/`Option`+`Enter`. Bubble Tea
+(the input layer) cannot see a bare `Shift+Enter` — most terminals send the same
+byte for `Enter` and `Shift+Enter` — so if you want `Shift+Enter` specifically,
+bind it in your terminal emulator to send a line feed (`\n`, i.e. `Ctrl+J`) or
+the escape sequence `\e\r`; tcode then turns that into a Claude newline.
 
 The **Git panel** (`Ctrl+G`) opens on the right and has two tabs, switched with
 `Tab` (or `←/→`):

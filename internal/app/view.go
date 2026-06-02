@@ -209,13 +209,13 @@ func (m *Model) statusBar() string {
 	case m.focus == focusSidebar:
 		hints = " ↑/↓ move · Enter open · . dotfiles · +/- width · Ctrl+B hide · Ctrl+Q quit"
 	case m.focus == focusTerminal:
-		hints = " Alt++ new tab · Alt+- close · Alt+←/→ switch · PgUp/PgDn scroll · Alt+1 Claude"
+		hints = " Alt++ new · Alt+- close · Alt+←/→ or Alt+Shift+n switch · PgUp/PgDn scroll · Alt+1 Claude"
 	case m.focus == focusGit:
 		hints = " ↑/↓ move · Tab CHANGES/HISTORY · r refresh · +/- width · Ctrl+G hide"
 	case m.autoHidden:
 		hints = " explorer hidden (window too narrow) · Alt+1/2 focus · Ctrl+Q quit"
 	default:
-		hints = " Ctrl+P open file · Ctrl+B explorer · Ctrl+G git · Ctrl+T terminals · Alt+1/2 focus"
+		hints = " Ctrl+P open · Ctrl+B explorer · Ctrl+G git · Ctrl+T terminals · Ctrl+J newline · Alt+1/2 focus"
 	}
 	rest := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("250")).

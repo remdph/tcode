@@ -227,6 +227,15 @@ func (m *Model) SendKey(k tea.KeyMsg) {
 	}
 }
 
+// SendNewline sends the Meta+Enter sequence (ESC + CR), which interactive
+// prompts such as claude-cli treat as "insert a newline" rather than "submit".
+func (m *Model) SendNewline() {
+	if m.ptmx == nil {
+		return
+	}
+	_, _ = m.ptmx.Write([]byte{0x1b, '\r'})
+}
+
 // View renders the emulator screen as a string with ANSI styling. When the
 // panel is focused and the program's cursor is visible, it draws a synthetic
 // block cursor (reverse video) at the cursor position, since the embedded

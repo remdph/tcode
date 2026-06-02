@@ -288,6 +288,14 @@ func (m *Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
+		// Insert a newline in claude's prompt (instead of submitting) on Ctrl+J or
+		// Alt/Option+Enter — and on Shift+Enter when the host terminal is set to
+		// send LF for it. Plain Enter still submits.
+		if k.Type == tea.KeyCtrlJ || (k.Type == tea.KeyEnter && k.Alt) {
+			m.claude.ScrollToBottom()
+			m.claude.SendNewline()
+			return m, nil
+		}
 		// PgUp/PgDn scroll the CLAUDE history (its scrollback buffer), unless an
 		// alt-screen program is running, in which case it does its own paging.
 		// Any other key snaps back to the live view before reaching the process.
@@ -304,8 +312,9 @@ func (m *Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.claude.ScrollToBottom()
 		m.claude.SendKey(k)
 	case focusTerminal:
-		// Switch tabs with Alt+Left/Right, PgUp/PgDn scroll the history; every
-		// other key goes to the terminal (after snapping back to the live view).
+		// Alt+Left/Right cycle tabs, Alt+Shift+<n> jumps to tab n, PgUp/PgDn
+		// scroll the history; every other key goes to the terminal (after
+		// snapping back to the live view).
 		switch {
 		case k.Alt && k.Type == tea.KeyLeft:
 			m.switchTerm(-1)
@@ -316,6 +325,12 @@ func (m *Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case k.Type == tea.KeyPgDown && !m.activeTermModel().AltScreen():
 			m.activeTermModel().ScrollPage(-1)
 		default:
+			if idx, ok := altTabIndex(k); ok {
+				if idx < len(m.terms) {
+					m.activeTerm = idx
+				}
+				return m, nil // swallow the combo even if that tab is absent
+			}
 			m.activeTermModel().ScrollToBottom()
 			m.activeTermModel().SendKey(k)
 		}
@@ -338,6 +353,39 @@ func (m *Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func runeIs(k tea.KeyMsg, r rune) bool {
 	return len(k.Runes) == 1 && k.Runes[0] == r
+}
+
+// altTabIndex maps an Alt+Shift+<digit> press to a 0-based terminal tab index.
+// Bubble Tea reports the shifted rune rather than a modifier, so this matches
+// the US-layout shifted digits (!@#$%^&*() for 1-9 and 0). ok is false for any
+// other key.
+func altTabIndex(k tea.KeyMsg) (int, bool) {
+	if !k.Alt || len(k.Runes) != 1 {
+		return 0, false
+	}
+	switch k.Runes[0] {
+	case '!':
+		return 0, true
+	case '@':
+		return 1, true
+	case '#':
+		return 2, true
+	case '$':
+		return 3, true
+	case '%':
+		return 4, true
+	case '^':
+		return 5, true
+	case '&':
+		return 6, true
+	case '*':
+		return 7, true
+	case '(':
+		return 8, true
+	case ')':
+		return 9, true
+	}
+	return 0, false
 }
 
 func (m *Model) toggleSidebar() {
@@ -415,11 +463,14 @@ func (m *Model) reopenSessionMenu() {
 	m.layout()
 }
 
-// toggleTerminals shows/hides the TERMINAL section (Ctrl+T). The shells keep
-// running while hidden.
+// toggleTerminals shows/hides the TERMINAL section (Ctrl+T). Revealing it moves
+// focus to it; hiding it returns focus to CLAUDE. The shells keep running while
+// hidden.
 func (m *Model) toggleTerminals() {
 	m.showTerminals = !m.showTerminals
-	if !m.showTerminals && m.focus == focusTerminal {
+	if m.showTerminals {
+		m.focus = focusTerminal
+	} else if m.focus == focusTerminal {
 		m.focus = focusClaude
 	}
 	m.layout()
