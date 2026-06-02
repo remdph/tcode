@@ -24,7 +24,7 @@ import (
 )
 
 // version is the current release of code-tui (installed as `tcode`).
-const version = "0.2.0"
+const version = "0.3.0"
 
 func main() {
 	prog := filepath.Base(os.Args[0])

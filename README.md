@@ -14,7 +14,7 @@ you browse and open files on the left, talk to Claude on the right, and drop int
 a shell whenever you need one — without ever leaving the terminal or juggling tmux
 splits by hand.
 
-Once installed it is invoked as **`tcode`**. Current version: **v0.2.0**.
+Once installed it is invoked as **`tcode`**. Current version: **v0.3.0**.
 
 ## What you get
 
@@ -133,7 +133,7 @@ Then invoke it from anywhere:
 tcode            # shows the project launcher (CURRENT PATH + recents)
 tcode /some/dir  # opens that directory directly
 tcode ~/repos/x  # ~ is expanded
-tcode --version  # prints the version (0.2.0)
+tcode --version  # prints the version (0.3.0)
 ```
 
 ### Project launcher
@@ -291,14 +291,16 @@ internal/config/    Per-project settings (panel widths)
 
 ## Status
 
-**v0.2.0.** Working: the project launcher (CURRENT PATH + recents), file
+**v0.3.0.** Working: the project launcher (CURRENT PATH + recents), file
 explorer (dotfiles shown by default, `.` toggle), a `Ctrl+P` fuzzy file finder,
-**multiple CLAUDE tabs** (independent sessions, each with its own session picker)
-and **multiple TERMINAL tabs**, a three-state focus model (`Ctrl+A` for CLAUDE;
+**multi-agent support** (auto-detects Claude, Codex, Gemini, Grok, OpenCode,
+Aider, Cursor, Amazon Q, Qwen, Crush, Goose and Copilot on `PATH`; pick a default,
+switch with `Alt+A`), **multiple agent tabs** (independent sessions) and
+**multiple TERMINAL tabs**, a three-state focus model (`Ctrl+A` for the agent;
 `Ctrl+B/G/T` show+focus / focus / hide), scrollable panel history (`PgUp`/`PgDn`),
-multiline input to Claude (`Shift+Enter` via the kitty keyboard protocol on
-**Bubble Tea v2**, plus `Ctrl+J` / `Alt+Enter`), a floating nano/vi editor, a Git
-panel (CHANGES / HISTORY), Omarchy accent theming, visible cursors and per-project
+multiline input (`Shift+Enter` via the kitty keyboard protocol on **Bubble Tea
+v2**, plus `Ctrl+J` / `Alt+Enter`), a floating nano/vi editor, a Git panel
+(CHANGES / HISTORY), Omarchy accent theming, visible cursors and per-project
 persisted panel widths.
 
 Possible next steps: mouse-wheel scrolling and click-to-focus, a command
