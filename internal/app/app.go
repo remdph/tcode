@@ -3,6 +3,7 @@
 package app
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -214,6 +215,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) handleKey(k tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	logKey(k) // no-op unless TCODE_DEBUG_KEYS is set
+
 	// While the floating editor is open, every key goes to it; it closes on its
 	// own exit (Ctrl+X in nano, :q in vi).
 	if m.editor != nil {
@@ -241,10 +244,10 @@ func (m *Model) handleKey(k tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// empty so String() is reliable); Alt combos are matched on Code+Mod because
 	// some terminals populate Text for Alt+printable, which would shadow the
 	// keystroke form.
-	// altOnly is Alt without Shift, so the Alt+<digit> focus shortcuts don't
+	// altOnly is Alt without Shift/Ctrl, so the Alt+<digit> focus shortcuts don't
 	// collide with the Alt+Shift+<digit> terminal-tab shortcuts.
-	altOnly := k.Mod == tea.ModAlt
-	alt := k.Mod.Contains(tea.ModAlt)
+	alt := altHeld(k.Mod)
+	altOnly := alt && !k.Mod.Contains(tea.ModShift) && !k.Mod.Contains(tea.ModCtrl)
 	switch {
 	case k.String() == "ctrl+q":
 		m.cleanup()
@@ -342,9 +345,9 @@ func (m *Model) handleKey(k tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		// scroll the history; every other key goes to the terminal (after
 		// snapping back to the live view).
 		switch {
-		case k.Mod.Contains(tea.ModAlt) && k.Code == tea.KeyLeft:
+		case altHeld(k.Mod) && k.Code == tea.KeyLeft:
 			m.switchTerm(-1)
-		case k.Mod.Contains(tea.ModAlt) && k.Code == tea.KeyRight:
+		case altHeld(k.Mod) && k.Code == tea.KeyRight:
 			m.switchTerm(1)
 		case k.Code == tea.KeyPgUp && !m.activeTermModel().AltScreen():
 			m.activeTermModel().ScrollPage(+1)
@@ -377,12 +380,42 @@ func (m *Model) handleKey(k tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// keyDebug enables logging of every received key press to a file, for
+// diagnosing terminal-specific key encodings. Set TCODE_DEBUG_KEYS=<path> (or
+// any value, which logs to /tmp/tcode-keys.log).
+var keyDebug = os.Getenv("TCODE_DEBUG_KEYS")
+
+func logKey(k tea.KeyPressMsg) {
+	if keyDebug == "" {
+		return
+	}
+	path := keyDebug
+	if path == "1" || path == "true" {
+		path = "/tmp/tcode-keys.log"
+	}
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	fmt.Fprintf(f, "string=%-16q code=%d (%q) mod=%03b text=%q\n",
+		k.String(), k.Code, string(k.Code), k.Mod, k.Text)
+}
+
+// altHeld reports whether the Alt modifier is active. Some terminals report the
+// physical Alt key as Meta, so Meta counts too; lock keys (Num/Caps/Scroll Lock)
+// set extra modifier bits under the kitty keyboard protocol and are ignored.
+func altHeld(m tea.KeyMod) bool {
+	m &^= tea.ModCapsLock | tea.ModNumLock | tea.ModScrollLock
+	return m.Contains(tea.ModAlt) || m.Contains(tea.ModMeta)
+}
+
 // altTabIndex maps an Alt+Shift+<digit> press to a 0-based terminal tab index.
 // With the kitty keyboard protocol the digit is reported directly (Code is the
 // unshifted '1'..'0' with ModAlt|ModShift); on terminals without it the press
 // arrives as Alt + the US-layout shifted symbol (!@#$…). ok is false otherwise.
 func altTabIndex(k tea.KeyPressMsg) (int, bool) {
-	if !k.Mod.Contains(tea.ModAlt) {
+	if !altHeld(k.Mod) {
 		return 0, false
 	}
 	if k.Mod.Contains(tea.ModShift) {

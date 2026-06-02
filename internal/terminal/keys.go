@@ -10,7 +10,7 @@ import (
 // process expects to receive on stdin.
 func encodeKey(k tea.KeyPressMsg) []byte {
 	var prefix []byte
-	if k.Mod.Contains(tea.ModAlt) {
+	if k.Mod.Contains(tea.ModAlt) || k.Mod.Contains(tea.ModMeta) {
 		prefix = []byte{0x1b} // ESC as the Meta/Alt prefix
 	}
 
