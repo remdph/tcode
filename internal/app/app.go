@@ -10,6 +10,7 @@ import (
 	"code-tui/internal/config"
 	"code-tui/internal/gitpanel"
 	"code-tui/internal/picker"
+	"code-tui/internal/quickopen"
 	"code-tui/internal/sessions"
 	"code-tui/internal/sidebar"
 	"code-tui/internal/terminal"
@@ -68,6 +69,9 @@ type Model struct {
 	editorID   int
 	editorName string
 	editorHint string
+
+	// quickOpen is the floating fuzzy file finder (Ctrl+P); nil when closed.
+	quickOpen *quickopen.Model
 
 	// Geometry computed by layout().
 	sbInnerW                 int
@@ -201,11 +205,29 @@ func (m *Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// While the quick-open finder is open, every key drives it. Confirming opens
+	// the chosen file in the floating editor (just like the explorer); Esc closes.
+	if m.quickOpen != nil {
+		updated, open, cancelled := m.quickOpen.Update(k)
+		*m.quickOpen = updated
+		switch {
+		case cancelled:
+			m.quickOpen = nil
+		case open != "":
+			m.quickOpen = nil
+			m.openEditor(open)
+		}
+		return m, nil
+	}
+
 	// Global shortcuts (intercepted before forwarding to the focused panel).
 	switch {
 	case k.Type == tea.KeyCtrlQ:
 		m.cleanup()
 		return m, tea.Quit
+	case k.Type == tea.KeyCtrlP || k.String() == "super+p":
+		m.openQuickOpen()
+		return m, nil
 	case k.String() == "ctrl+b" || k.String() == "super+b":
 		m.toggleSidebar()
 		return m, nil
@@ -413,6 +435,22 @@ func (m *Model) cleanup() {
 	}
 }
 
+// openQuickOpen opens the floating fuzzy file finder over the current project.
+func (m *Model) openQuickOpen() {
+	qo := quickopen.New(m.dir)
+	m.quickOpen = &qo
+	m.layout() // size it before the first render
+}
+
+// quickOpenDims returns the inner content size (width, height) of the floating
+// quick-open box, which covers most (but not all) of the screen.
+func (m *Model) quickOpenDims() (w, h int) {
+	boxW := clamp(m.width*3/4, 40, max(m.width-4, 10))
+	boxH := clamp(m.height*2/3, 8, max(m.height-2, 6))
+	// Box = border (2) on each axis + a title row inside.
+	return max(boxW-2, 1), max(boxH-3, 1)
+}
+
 // openEditor opens path in a floating editor (nano, or vi as a fallback).
 func (m *Model) openEditor(path string) {
 	args, hint := editorCommand(path)
@@ -571,6 +609,10 @@ func (m *Model) layout() {
 		ew, eh := m.editorDims()
 		m.editor.SetSize(ew, eh)
 	}
+	if m.quickOpen != nil {
+		qw, qh := m.quickOpenDims()
+		m.quickOpen.SetSize(qw, qh)
+	}
 	if m.picker != nil {
 		m.picker.SetSize(max(rightW, 1), max(m.claudeInnerH, 1))
 	}
@@ -588,6 +630,11 @@ func (m *Model) View() string {
 	// The floating editor takes over the whole screen when open.
 	if m.editor != nil {
 		return m.editorView()
+	}
+
+	// The quick-open finder floats over the screen until dismissed.
+	if m.quickOpen != nil {
+		return m.quickOpenView()
 	}
 
 	bodyH := m.height - 1

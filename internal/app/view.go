@@ -58,6 +58,30 @@ func (m *Model) editorView() string {
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, box)
 }
 
+// quickOpenView renders the floating fuzzy file finder centered over the screen.
+func (m *Model) quickOpenView() string {
+	cw, ch := m.quickOpenDims()
+
+	title := lipgloss.NewStyle().
+		Foreground(theme.OnAccent).
+		Background(theme.Accent).
+		Bold(true).
+		Inline(true).
+		Width(cw).
+		MaxWidth(cw).
+		Render(" Open file  —  type to search · ↑/↓ select · Enter open · Esc cancel")
+
+	content := blockRect(m.quickOpen.View(), cw, ch)
+	inner := lipgloss.JoinVertical(lipgloss.Left, title, content)
+
+	box := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(theme.Accent).
+		Render(inner)
+
+	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, box)
+}
+
 // terminalHeader draws the TERMINAL label followed by one tab chip per open
 // terminal. The active tab is highlighted with the theme accent; the label is
 // accent-colored when the panel is focused.
@@ -191,7 +215,7 @@ func (m *Model) statusBar() string {
 	case m.autoHidden:
 		hints = " explorer hidden (window too narrow) · Alt+1/2 focus · Ctrl+Q quit"
 	default:
-		hints = " Ctrl+B explorer · Ctrl+G git · Ctrl+T terminals · PgUp/PgDn scroll · Alt+1/2 focus"
+		hints = " Ctrl+P open file · Ctrl+B explorer · Ctrl+G git · Ctrl+T terminals · Alt+1/2 focus"
 	}
 	rest := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("250")).

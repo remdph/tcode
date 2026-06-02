@@ -129,6 +129,7 @@ go run . /some/dir  # opens another directory
 
 | Key             | Action                                          |
 |-----------------|-------------------------------------------------|
+| `Ctrl+P`        | Open the fuzzy file finder (quick open)         |
 | `Ctrl+B`        | Show / hide the side explorer (and focus it)    |
 | `Ctrl+G`        | Show / hide the Git panel (and focus it)        |
 | `Ctrl+T`        | Show / hide the TERMINAL section (keeps shells) |
@@ -170,6 +171,17 @@ open it in a floating editor (almost full-screen) running `nano` — or `vi` if
 nano is not available. Close the editor with its own command (`Ctrl+X` in nano,
 `:q` in vi) to return to the UI.
 
+### Quick open (fuzzy file finder)
+
+Press `Ctrl+P` (or `Super+P` if your terminal forwards it) to open a **floating
+file finder**, just like VS Code's *Quick Open*. Start typing and the project's
+files are fuzzy-matched as you go, ranked best-first (matches in the file name
+beat matches that only span the directory path). Move the selection with `↑/↓`
+(or `Ctrl+N`/`Ctrl+P`), press `Enter` to open the highlighted file in the same
+floating `nano`/`vi` editor the explorer uses, or `Esc` to dismiss. The index is
+built when you open the finder and skips noise directories (`.git`,
+`node_modules`, …).
+
 ### Scrolling the history
 
 The CLAUDE and TERMINAL panels keep a scrollback buffer, just like a normal
@@ -210,6 +222,7 @@ internal/sidebar/   File explorer (tree)
 internal/terminal/  PTY-backed terminal panel + vt emulator
 internal/sessions/  Discovery of past Claude Code sessions
 internal/picker/    Selector UI (sessions and the launcher)
+internal/quickopen/ Fuzzy file finder (Ctrl+P quick open)
 internal/launcher/  Startup project launcher (CURRENT PATH + recents)
 internal/recents/   Recently opened directories
 internal/gitpanel/  Git panel (CHANGES / HISTORY)
@@ -220,9 +233,10 @@ internal/config/    Per-project settings (panel widths)
 ## Status
 
 **v0.1.0.** Working: the project launcher (CURRENT PATH + recents), file
-explorer, claude-cli with a session picker, multiple terminal tabs, a floating
-nano/vi editor, a Git panel (CHANGES / HISTORY), Omarchy accent theming, visible
-cursors and per-project persisted panel widths.
+explorer (with dotfiles and a `.` toggle), a `Ctrl+P` fuzzy file finder, claude-cli
+with a session picker, scrollable panel history (`PgUp`/`PgDn`), multiple terminal
+tabs, a floating nano/vi editor, a Git panel (CHANGES / HISTORY), Omarchy accent
+theming, visible cursors and per-project persisted panel widths.
 
 Possible next steps: mouse-wheel scrolling and click-to-focus, a command
 palette, resizing the CLAUDE/TERMINAL split, and Git actions (stage/commit).
