@@ -207,15 +207,15 @@ func (m *Model) statusBar() string {
 	var hints string
 	switch {
 	case m.focus == focusSidebar:
-		hints = " ↑/↓ move · Enter open · . dotfiles · +/- width · Ctrl+B hide · Ctrl+Q quit"
+		hints = " ↑/↓ move · Enter open · . dotfiles · +/- width · Ctrl+B hide · Ctrl+A Claude"
 	case m.focus == focusTerminal:
-		hints = " Alt++ new · Alt+- close · Alt+Shift+←/→ or Alt+Shift+n switch · PgUp/PgDn scroll · Alt+1 Claude"
+		hints = " Alt++ new · Alt+- close · Alt+n or Alt+Shift+←/→ tab · PgUp/PgDn scroll · Ctrl+A Claude"
 	case m.focus == focusGit:
-		hints = " ↑/↓ move · Tab CHANGES/HISTORY · r refresh · +/- width · Ctrl+G hide"
+		hints = " ↑/↓ move · Tab CHANGES/HISTORY · r refresh · +/- width · Ctrl+G hide · Ctrl+A Claude"
 	case m.autoHidden:
-		hints = " explorer hidden (window too narrow) · Alt+1/2 focus · Ctrl+Q quit"
+		hints = " explorer hidden (window too narrow) · Ctrl+A Claude · Ctrl+Q quit"
 	default:
-		hints = " Ctrl+P open · Ctrl+B explorer · Ctrl+G git · Ctrl+T terminals · Ctrl+J newline · Alt+1/2 focus"
+		hints = " Ctrl+P open · Ctrl+A Claude · Ctrl+B explorer · Ctrl+G git · Ctrl+T terminals · Ctrl+J newline"
 	}
 	rest := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("250")).

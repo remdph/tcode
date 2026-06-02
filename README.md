@@ -129,33 +129,39 @@ go run . /some/dir  # opens another directory
 
 | Key             | Action                                          |
 |-----------------|-------------------------------------------------|
+| `Ctrl+A`        | Focus the CLAUDE panel                          |
+| `Ctrl+B`        | Explorer: show+focus / focus / hide             |
+| `Ctrl+G`        | Git panel: show+focus / focus / hide            |
+| `Ctrl+T`        | TERMINAL section: show+focus / focus / hide     |
 | `Ctrl+P`        | Open the fuzzy file finder (quick open)         |
-| `Ctrl+B`        | Show / hide the side explorer (and focus it)    |
-| `Ctrl+G`        | Show / hide the Git panel (and focus it)        |
-| `Ctrl+T`        | Show / hide the TERMINAL section (keeps shells) |
-| `Alt+1`         | Focus the CLAUDE panel                          |
-| `Alt+2`         | Focus the TERMINAL panel                        |
-| `Alt+3`         | Focus the explorer (when visible)               |
+| `Alt+1…0`       | Switch to tab 1…10 of the focused section (terminal) |
+| `Alt+Shift+←` / `Alt+Shift+→` | Cycle tabs of the focused section (terminal) |
 | `Alt++`         | Open a new terminal tab (and focus it)          |
 | `Alt+-`         | Close the current terminal tab (keeps one)      |
-| `Alt+Shift+←` / `Alt+Shift+→` | Cycle terminal tabs (when TERMINAL focused) |
-| `Alt+Shift+1…0` | Jump to terminal tab 1…10 (when TERMINAL focused) |
 | `Shift+Enter`   | Insert a newline in the CLAUDE prompt (multiline) |
 | `Ctrl+J`        | Insert a newline in the CLAUDE prompt (multiline) |
 | `PgUp` / `PgDn` | Scroll the CLAUDE / terminal history (scrollback) |
 | `.`             | Toggle hidden dotfiles (when the explorer is focused) |
 | `Ctrl+Q`        | Quit                                            |
 
-Revealing the explorer (`Ctrl+B`), the Git panel (`Ctrl+G`) or the TERMINAL
-section (`Ctrl+T`) moves focus **to** that section; hiding it returns focus to
-the CLAUDE panel, which is never hidden.
+### Focus model
 
-The TERMINAL panel supports multiple tabs, shown next to its label (the active
+The **CLAUDE** panel is always present and is the home base: `Ctrl+A` returns
+focus to it from anywhere. The other three sections each have a toggle —
+`Ctrl+B` (explorer), `Ctrl+G` (Git), `Ctrl+T` (terminals) — that cycles through
+three states:
+
+1. **Hidden** → it is shown and focused.
+2. **Visible but not focused** → it just takes focus (it is *not* hidden). This
+   lets you recover focus with a single keystroke without accidentally closing
+   the section.
+3. **Visible and focused** → it is hidden, and focus returns to CLAUDE.
+
+The TERMINAL section supports multiple tabs, shown next to its label (the active
 one is highlighted with the accent color). Each tab is an independent shell.
-Cycle through them with `Alt+Shift+←/→`, or jump straight to one with `Alt+Shift+<n>`
-(`Alt+Shift+1` for the first tab, and so on). `Ctrl+T` hides or shows the whole
-TERMINAL section (giving CLAUDE the full height); the shells keep running while
-hidden.
+With TERMINAL focused, switch tabs with `Alt+<n>` (jump straight to tab *n*) or
+cycle with `Alt+Shift+←/→`; `Alt++` / `Alt+-` open and close tabs. The shells
+keep running while the section is hidden.
 
 ### Multiline input to Claude
 

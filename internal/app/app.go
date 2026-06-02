@@ -244,14 +244,16 @@ func (m *Model) handleKey(k tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// empty so String() is reliable); Alt combos are matched on Code+Mod because
 	// some terminals populate Text for Alt+printable, which would shadow the
 	// keystroke form.
-	// altOnly is Alt without Shift/Ctrl, so the Alt+<digit> focus shortcuts don't
-	// collide with the Alt+Shift+<digit> terminal-tab shortcuts.
 	alt := altHeld(k.Mod)
-	altOnly := alt && !k.Mod.Contains(tea.ModShift) && !k.Mod.Contains(tea.ModCtrl)
 	switch {
 	case k.String() == "ctrl+q":
 		m.cleanup()
 		return m, tea.Quit
+	case k.String() == "ctrl+a" && m.focus != focusClaude:
+		// Focus the CLAUDE panel. When already focused, fall through so Ctrl+A
+		// reaches claude (it is a common "start of line" binding).
+		m.focus = focusClaude
+		return m, nil
 	case k.String() == "ctrl+p", k.String() == "super+p":
 		m.openQuickOpen()
 		return m, nil
@@ -263,19 +265,6 @@ func (m *Model) handleKey(k tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case k.String() == "ctrl+t":
 		m.toggleTerminals()
-		return m, nil
-	case altOnly && k.Code == '1':
-		m.focus = focusClaude
-		return m, nil
-	case altOnly && k.Code == '2':
-		if m.showTerminals {
-			m.focus = focusTerminal
-		}
-		return m, nil
-	case altOnly && k.Code == '3':
-		if m.showSidebar {
-			m.focus = focusSidebar
-		}
 		return m, nil
 	case alt && (k.Code == '+' || k.Code == '='):
 		m.newTerminal() // '+' is Shift+'='; accept either
@@ -341,10 +330,10 @@ func (m *Model) handleKey(k tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.claude.ScrollToBottom()
 		m.claude.SendKey(k)
 	case focusTerminal:
-		// Alt+Shift+Left/Right cycle tabs, Alt+Shift+<n> jumps to tab n, PgUp/PgDn
+		// Alt+Shift+Left/Right cycle tabs, Alt+<n> jumps to tab n, PgUp/PgDn
 		// scroll the history; every other key goes to the terminal (after
-		// snapping back to the live view). Shift is required because many
-		// terminals reserve a bare Alt+Left/Right for word navigation.
+		// snapping back to the live view). Shift is required for the arrows
+		// because many terminals reserve a bare Alt+Left/Right for word nav.
 		shift := k.Mod.Contains(tea.ModShift)
 		switch {
 		case altHeld(k.Mod) && shift && k.Code == tea.KeyLeft:
@@ -412,21 +401,19 @@ func altHeld(m tea.KeyMod) bool {
 	return m.Contains(tea.ModAlt) || m.Contains(tea.ModMeta)
 }
 
-// altTabIndex maps an Alt+Shift+<digit> press to a 0-based terminal tab index.
-// With the kitty keyboard protocol the digit is reported directly (Code is the
-// unshifted '1'..'0' with ModAlt|ModShift); on terminals without it the press
-// arrives as Alt + the US-layout shifted symbol (!@#$…). ok is false otherwise.
+// altTabIndex maps an Alt+<digit> press (with or without Shift) to a 0-based
+// terminal tab index. With the kitty keyboard protocol the digit is reported
+// directly in Code; on terminals without it an Alt+Shift+<digit> arrives as Alt
+// + the US-layout shifted symbol (!@#$…). ok is false for any other key.
 func altTabIndex(k tea.KeyPressMsg) (int, bool) {
 	if !altHeld(k.Mod) {
 		return 0, false
 	}
-	if k.Mod.Contains(tea.ModShift) {
-		switch k.Code {
-		case '1', '2', '3', '4', '5', '6', '7', '8', '9':
-			return int(k.Code - '1'), true
-		case '0':
-			return 9, true
-		}
+	switch k.Code {
+	case '1', '2', '3', '4', '5', '6', '7', '8', '9':
+		return int(k.Code - '1'), true
+	case '0':
+		return 9, true
 	}
 	switch k.Code { // legacy fallback: Alt + shifted symbol
 	case '!':
@@ -453,14 +440,23 @@ func altTabIndex(k tea.KeyPressMsg) (int, bool) {
 	return 0, false
 }
 
+// toggleSidebar cycles the explorer through three states: hidden -> shown and
+// focused; shown-but-unfocused -> focused (without hiding, so a stray Ctrl+B
+// recovers focus instead of closing it); focused -> hidden (focus back to CLAUDE).
 func (m *Model) toggleSidebar() {
-	m.sidebarPref = !m.sidebarPref
-	m.layout()
-	// Showing the explorer focuses it; hiding it returns focus to CLAUDE.
-	if m.showSidebar {
+	switch {
+	case !m.showSidebar:
+		m.sidebarPref = true
+		m.layout()
+		if m.showSidebar {
+			m.focus = focusSidebar
+		}
+	case m.focus != focusSidebar:
 		m.focus = focusSidebar
-	} else if m.focus == focusSidebar {
+	default:
+		m.sidebarPref = false
 		m.focus = focusClaude
+		m.layout()
 	}
 }
 
@@ -528,14 +524,18 @@ func (m *Model) reopenSessionMenu() {
 	m.layout()
 }
 
-// toggleTerminals shows/hides the TERMINAL section (Ctrl+T). Revealing it moves
-// focus to it; hiding it returns focus to CLAUDE. The shells keep running while
-// hidden.
+// toggleTerminals cycles the TERMINAL section through three states like
+// toggleSidebar: hidden -> shown and focused; shown-but-unfocused -> focused;
+// focused -> hidden (focus back to CLAUDE). The shells keep running while hidden.
 func (m *Model) toggleTerminals() {
-	m.showTerminals = !m.showTerminals
-	if m.showTerminals {
+	switch {
+	case !m.showTerminals:
+		m.showTerminals = true
 		m.focus = focusTerminal
-	} else if m.focus == focusTerminal {
+	case m.focus != focusTerminal:
+		m.focus = focusTerminal
+	default:
+		m.showTerminals = false
 		m.focus = focusClaude
 	}
 	m.layout()
@@ -648,14 +648,20 @@ func (m *Model) resizeGit(delta int) {
 	m.saveConfig()
 }
 
-// toggleGit shows/hides the Git panel. Showing it focuses it and refreshes its
-// data; hiding it returns focus to CLAUDE.
+// toggleGit cycles the Git panel through three states like toggleSidebar:
+// hidden -> shown (refreshed) and focused; shown-but-unfocused -> focused;
+// focused -> hidden (focus back to CLAUDE).
 func (m *Model) toggleGit() {
-	m.showGit = !m.showGit
-	if m.showGit {
+	switch {
+	case !m.showGit:
+		m.showGit = true
 		m.gitPanel.Refresh()
 		m.focus = focusGit
-	} else if m.focus == focusGit {
+	case m.focus != focusGit:
+		m.gitPanel.Refresh()
+		m.focus = focusGit
+	default:
+		m.showGit = false
 		m.focus = focusClaude
 	}
 	m.layout()
