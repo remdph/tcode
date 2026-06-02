@@ -41,6 +41,10 @@ type Model struct {
 	started       bool
 	dead          bool
 
+	// scrollOff is how many lines the view is scrolled up into the scrollback
+	// buffer (0 = live, showing the current screen).
+	scrollOff int
+
 	// Cursor overlay state.
 	emuMu         sync.Mutex // guards the cursor overlay against readLoop writes
 	focused       bool       // draw a synthetic cursor when true
@@ -172,6 +176,47 @@ func (m *Model) SetSize(w, h int) {
 	}
 }
 
+// AltScreen reports whether the running process is using the alternate screen
+// (e.g. a full-screen editor or pager). Such programs do their own paging, so
+// PgUp/PgDn should be forwarded to them rather than scrolling our scrollback.
+func (m *Model) AltScreen() bool {
+	return m.emu != nil && m.emu.IsAltScreen()
+}
+
+// maxScroll is the number of scrollback lines available above the screen.
+func (m *Model) maxScroll() int {
+	if m.emu == nil {
+		return 0
+	}
+	return m.emu.ScrollbackLen()
+}
+
+// ScrollPage moves the view by one page through the scrollback buffer. dir > 0
+// scrolls up (into the past), dir < 0 scrolls back down toward the live view.
+func (m *Model) ScrollPage(dir int) {
+	page := m.height - 1
+	if page < 1 {
+		page = 1
+	}
+	off := m.scrollOff + dir*page
+	if hi := m.maxScroll(); off > hi {
+		off = hi
+	}
+	if off < 0 {
+		off = 0
+	}
+	m.scrollOff = off
+}
+
+// ScrollToBottom returns to the live view (the bottom of the history).
+func (m *Model) ScrollToBottom() { m.scrollOff = 0 }
+
+// Scrolled reports whether the panel is currently showing scrollback.
+func (m *Model) Scrolled() bool { return m.scrollOff > 0 }
+
+// ScrollOffset is how many lines the view is scrolled up from the live bottom.
+func (m *Model) ScrollOffset() int { return m.scrollOff }
+
 // SendKey translates a Bubble Tea key press to bytes and sends it to the PTY.
 func (m *Model) SendKey(k tea.KeyMsg) {
 	if m.ptmx == nil {
@@ -190,12 +235,19 @@ func (m *Model) View() string {
 	if m.emu == nil {
 		return ""
 	}
-	if !m.focused {
-		return m.emu.Render()
-	}
 
 	m.emuMu.Lock()
 	defer m.emuMu.Unlock()
+
+	// When scrolled into the history, show that window instead of the live
+	// screen (and no synthetic cursor, which lives at the bottom).
+	if m.scrollOff > 0 {
+		return m.scrolledView()
+	}
+
+	if !m.focused {
+		return m.emu.Render()
+	}
 
 	if !m.cursorVisible {
 		return m.emu.Render()
@@ -218,6 +270,47 @@ func (m *Model) View() string {
 	out := m.emu.Render()
 	m.emu.SetCell(pos.X, pos.Y, orig)
 	return out
+}
+
+// scrolledView renders a window into the scrollback buffer followed by the
+// current screen, offset upward by m.scrollOff lines. The caller must hold
+// m.emuMu. The history is the scrollback lines (oldest first) followed by the
+// h on-screen rows; the visible window is bottom-aligned and shifted up by the
+// scroll offset.
+func (m *Model) scrolledView() string {
+	w, h := m.emu.Width(), m.emu.Height()
+	sbLen := m.emu.ScrollbackLen()
+	total := sbLen + h
+
+	top := total - h - m.scrollOff
+	if top < 0 {
+		top = 0
+	}
+
+	lines := make(uv.Lines, 0, h)
+	for row := 0; row < h; row++ {
+		idx := top + row
+		if idx < 0 || idx >= total {
+			lines = append(lines, uv.Line{})
+			continue
+		}
+		line := make(uv.Line, w)
+		for x := 0; x < w; x++ {
+			var cell *uv.Cell
+			if idx < sbLen {
+				cell = m.emu.ScrollbackCellAt(x, idx)
+			} else {
+				cell = m.emu.CellAt(x, idx-sbLen)
+			}
+			if cell != nil {
+				line[x] = *cell
+			} else {
+				line[x] = uv.EmptyCell
+			}
+		}
+		lines = append(lines, line)
+	}
+	return lines.Render()
 }
 
 // Close terminates the process and closes the PTY.

@@ -138,6 +138,8 @@ go run . /some/dir  # opens another directory
 | `Alt++`         | Open a new terminal tab (and focus it)          |
 | `Alt+-`         | Close the current terminal tab (keeps one)      |
 | `Alt+←` / `Alt+→` | Switch terminal tab (only when TERMINAL focused) |
+| `PgUp` / `PgDn` | Scroll the CLAUDE / terminal history (scrollback) |
+| `.`             | Toggle hidden dotfiles (when the explorer is focused) |
 | `Ctrl+Q`        | Quit                                            |
 
 Showing the explorer with `Ctrl+B` moves focus to it; hiding it returns focus to
@@ -160,12 +162,24 @@ Navigate with `↑/↓`, `r` refreshes, and `+/-` resize the panel (its width is
 remembered per project, like the explorer).
 
 In the explorer (when focused): `↑/↓` or `j/k` to move, `→` to expand a folder,
-`←` to collapse, and `+` / `-` to resize the explorer (its width is remembered
-per project under `~/.config/code-tui/`). Press `Enter` on a folder to toggle
-it, or on a **file** to
+`←` to collapse, `.` to toggle hidden dotfiles, and `+` / `-` to resize the
+explorer (its width is remembered per project under `~/.config/code-tui/`).
+**Hidden files (names starting with a dot) are shown by default**; press `.` to
+hide or reveal them. Press `Enter` on a folder to toggle it, or on a **file** to
 open it in a floating editor (almost full-screen) running `nano` — or `vi` if
 nano is not available. Close the editor with its own command (`Ctrl+X` in nano,
 `:q` in vi) to return to the UI.
+
+### Scrolling the history
+
+The CLAUDE and TERMINAL panels keep a scrollback buffer, just like a normal
+terminal. With either panel focused, press `PgUp` / `PgDn` to scroll back through
+its history (Claude streams its conversation into this buffer, so this is how you
+review earlier messages). The status bar shows a `SCROLLBACK` indicator while you
+are scrolled up; pressing any other key — or `PgDn` to the bottom — snaps back to
+the live view. If a full-screen program is running in the panel (a pager or
+editor using the alternate screen), `PgUp` / `PgDn` are sent to it instead so it
+can do its own paging.
 
 When a terminal panel is focused, every key press is sent to its process
 (including `Ctrl+C` to interrupt).

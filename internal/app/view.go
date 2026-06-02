@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"code-tui/internal/terminal"
 	"code-tui/internal/theme"
 
 	"github.com/charmbracelet/lipgloss"
@@ -126,6 +127,20 @@ func blockRect(content string, w, h int) string {
 		Render(content)
 }
 
+// focusedScroll returns the terminal panel that PgUp/PgDn currently scrolls
+// (CLAUDE or the active terminal tab), or nil if neither is focused.
+func (m *Model) focusedScroll() *terminal.Model {
+	switch m.focus {
+	case focusClaude:
+		if m.picker == nil {
+			return m.claude
+		}
+	case focusTerminal:
+		return m.activeTermModel()
+	}
+	return nil
+}
+
 // statusBar draws the bottom bar with the current focus and the shortcuts.
 func (m *Model) statusBar() string {
 	var focusName string
@@ -147,18 +162,36 @@ func (m *Model) statusBar() string {
 		Padding(0, 1).
 		Render(focusName)
 
+	// While a terminal panel is scrolled into its history, the hint shows how to
+	// get back to the live view.
+	if scrolled := m.focusedScroll(); scrolled != nil && scrolled.Scrolled() {
+		hints := fmt.Sprintf(" SCROLLBACK ↑%d lines · PgUp/PgDn scroll · any key → live",
+			scrolled.ScrollOffset())
+		rest := lipgloss.NewStyle().
+			Foreground(theme.OnAccent).
+			Background(theme.Accent).
+			Render(hints)
+		bar := lipgloss.JoinHorizontal(lipgloss.Left, seg, rest)
+		return lipgloss.NewStyle().
+			Inline(true).
+			Width(m.width).
+			MaxWidth(m.width).
+			Background(theme.Accent).
+			Render(bar)
+	}
+
 	var hints string
 	switch {
 	case m.focus == focusSidebar:
-		hints = " ↑/↓ move · Enter open · +/- width · Ctrl+B hide · Ctrl+Q quit"
+		hints = " ↑/↓ move · Enter open · . dotfiles · +/- width · Ctrl+B hide · Ctrl+Q quit"
 	case m.focus == focusTerminal:
-		hints = " Alt++ new tab · Alt+- close · Alt+←/→ switch · Alt+1 Claude · Ctrl+Q quit"
+		hints = " Alt++ new tab · Alt+- close · Alt+←/→ switch · PgUp/PgDn scroll · Alt+1 Claude"
 	case m.focus == focusGit:
 		hints = " ↑/↓ move · Tab CHANGES/HISTORY · r refresh · +/- width · Ctrl+G hide"
 	case m.autoHidden:
 		hints = " explorer hidden (window too narrow) · Alt+1/2 focus · Ctrl+Q quit"
 	default:
-		hints = " Ctrl+B explorer · Ctrl+G git · Ctrl+T terminals · Alt+1/2 focus · Ctrl+Q quit"
+		hints = " Ctrl+B explorer · Ctrl+G git · Ctrl+T terminals · PgUp/PgDn scroll · Alt+1/2 focus"
 	}
 	rest := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("250")).

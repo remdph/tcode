@@ -266,15 +266,35 @@ func (m *Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
+		// PgUp/PgDn scroll the CLAUDE history (its scrollback buffer), unless an
+		// alt-screen program is running, in which case it does its own paging.
+		// Any other key snaps back to the live view before reaching the process.
+		if !m.claude.AltScreen() {
+			switch k.Type {
+			case tea.KeyPgUp:
+				m.claude.ScrollPage(+1)
+				return m, nil
+			case tea.KeyPgDown:
+				m.claude.ScrollPage(-1)
+				return m, nil
+			}
+		}
+		m.claude.ScrollToBottom()
 		m.claude.SendKey(k)
 	case focusTerminal:
-		// Switch tabs with Alt+Left/Right; everything else goes to the terminal.
+		// Switch tabs with Alt+Left/Right, PgUp/PgDn scroll the history; every
+		// other key goes to the terminal (after snapping back to the live view).
 		switch {
 		case k.Alt && k.Type == tea.KeyLeft:
 			m.switchTerm(-1)
 		case k.Alt && k.Type == tea.KeyRight:
 			m.switchTerm(1)
+		case k.Type == tea.KeyPgUp && !m.activeTermModel().AltScreen():
+			m.activeTermModel().ScrollPage(+1)
+		case k.Type == tea.KeyPgDown && !m.activeTermModel().AltScreen():
+			m.activeTermModel().ScrollPage(-1)
 		default:
+			m.activeTermModel().ScrollToBottom()
 			m.activeTermModel().SendKey(k)
 		}
 	case focusGit:

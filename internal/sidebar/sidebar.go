@@ -34,6 +34,7 @@ type Model struct {
 	cursor        int
 	offset        int
 	width, height int
+	showHidden    bool // show dotfiles (toggle with ".")
 }
 
 var (
@@ -50,14 +51,15 @@ func selectedStyle() lipgloss.Style {
 // New creates the explorer pointing at dir.
 func New(dir string) Model {
 	root := &node{name: filepath.Base(dir), path: dir, isDir: true, expanded: true}
-	m := Model{root: root, width: 28, height: 20}
-	loadChildren(root)
+	m := Model{root: root, width: 28, height: 20, showHidden: true}
+	loadChildren(root, m.showHidden)
 	m.rebuild()
 	return m
 }
 
-// loadChildren reads the node's directory entries (folders first).
-func loadChildren(n *node) {
+// loadChildren reads the node's directory entries (folders first). Dotfiles are
+// included unless showHidden is false.
+func loadChildren(n *node, showHidden bool) {
 	n.loaded = true
 	entries, err := os.ReadDir(n.path)
 	if err != nil {
@@ -73,9 +75,8 @@ func loadChildren(n *node) {
 	n.children = n.children[:0]
 	for _, e := range entries {
 		name := e.Name()
-		if strings.HasPrefix(name, ".") && name != ".." {
-			// Hide dotfiles by default (like VSCode's files.exclude).
-			continue
+		if !showHidden && strings.HasPrefix(name, ".") && name != ".." {
+			continue // hidden dotfile and the user has hidden them
 		}
 		n.children = append(n.children, &node{
 			name:  name,
@@ -83,6 +84,27 @@ func loadChildren(n *node) {
 			isDir: e.IsDir(),
 			depth: n.depth + 1,
 		})
+	}
+}
+
+// reload re-reads every already-loaded directory under n, applying the current
+// showHidden setting while preserving each folder's expanded/loaded subtree.
+func (m *Model) reload(n *node) {
+	if !n.loaded {
+		return
+	}
+	prev := make(map[string]*node, len(n.children))
+	for _, c := range n.children {
+		prev[c.name] = c
+	}
+	loadChildren(n, m.showHidden)
+	// Reuse the previous node objects so expansion state and loaded children
+	// survive the reload (loadChildren creates fresh, collapsed nodes).
+	for i, c := range n.children {
+		if old, ok := prev[c.name]; ok {
+			n.children[i] = old
+			m.reload(old)
+		}
 	}
 }
 
@@ -129,7 +151,7 @@ func (m Model) Update(k tea.KeyMsg) (Model, tea.Cmd) {
 		if n := m.current(); n != nil {
 			if n.isDir {
 				if !n.expanded && !n.loaded {
-					loadChildren(n)
+					loadChildren(n, m.showHidden)
 				}
 				n.expanded = !n.expanded
 				m.rebuild()
@@ -149,6 +171,20 @@ func (m Model) Update(k tea.KeyMsg) (Model, tea.Cmd) {
 		m.cursor = 0
 	case "G", "end":
 		m.cursor = len(m.flat) - 1
+	case ".":
+		// Toggle showing dotfiles, keeping the cursor on the same node if possible.
+		cur := m.current()
+		m.showHidden = !m.showHidden
+		m.reload(m.root)
+		m.rebuild()
+		if cur != nil {
+			for i, n := range m.flat {
+				if n == cur {
+					m.cursor = i
+					break
+				}
+			}
+		}
 	}
 	m.ensureVisible()
 	return m, cmd
