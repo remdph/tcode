@@ -206,6 +206,7 @@ func (m *Model) toAgentPicker(tab *claudeTab) {
 func (m *Model) configureTab(tab *claudeTab, agent agents.Agent) {
 	tab.agent = agent
 	tab.term = terminal.New(m.allocID(), strings.ToUpper(agent.Name), m.dir, agent.Args)
+	tab.term.SetEnv(agent.Env)
 	if agent.Bin == "claude" {
 		if past := sessions.List(m.dir); len(past) > 0 {
 			tab.picker = newSessionPicker(past)
@@ -755,6 +756,7 @@ func (m *Model) resetClaudeTabToMenu(tab *claudeTab) {
 	tab.term.Close()
 	if tab.agent.Bin == "claude" {
 		tab.term = terminal.New(m.allocID(), strings.ToUpper(tab.agent.Name), m.dir, tab.agent.Args)
+		tab.term.SetEnv(tab.agent.Env)
 		tab.picker = newSessionPicker(sessions.List(m.dir))
 		tab.mode = pickSession
 	} else {

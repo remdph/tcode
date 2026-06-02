@@ -26,10 +26,11 @@ type ExitMsg struct {
 
 // Model is an embedded terminal panel.
 type Model struct {
-	id   int
-	name string
-	dir  string
-	args []string
+	id       int
+	name     string
+	dir      string
+	args     []string
+	extraEnv []string
 
 	emu  *vt.SafeEmulator
 	ptmx *os.File
@@ -77,6 +78,10 @@ func (m *Model) ID() int { return m.id }
 // SetArgs sets the command to run. It only has effect if called before Start.
 func (m *Model) SetArgs(args []string) { m.args = args }
 
+// SetEnv sets extra environment variables ("KEY=VALUE") for the process, applied
+// on top of the inherited environment. Only has effect if called before Start.
+func (m *Model) SetEnv(env []string) { m.extraEnv = env }
+
 // Started reports whether the process has already been launched.
 func (m *Model) Started() bool { return m.started }
 
@@ -100,6 +105,7 @@ func (m *Model) Start(prog *tea.Program) error {
 	c := exec.Command(m.args[0], m.args[1:]...)
 	c.Dir = m.dir
 	c.Env = append(os.Environ(), "TERM=xterm-256color", "COLORTERM=truecolor")
+	c.Env = append(c.Env, m.extraEnv...)
 
 	ptmx, err := pty.StartWithSize(c, &pty.Winsize{Rows: uint16(h), Cols: uint16(w)})
 	if err != nil {

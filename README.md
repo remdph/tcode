@@ -80,8 +80,9 @@ which coding-agent CLIs are installed** on your `PATH` and lets you pick one:
 - **`Alt+A`** opens a new tab on that selector at any time, to switch agents; the
   new choice becomes the default for future tabs.
 
-Detected agents (only those present on `PATH` are shown), each launched in its
-auto-approve / "yolo" mode where one is known:
+Detected agents (only those present on `PATH` are shown), each launched in the
+equivalent of Claude's auto-approve ("yolo") mode — the flag/env for each was
+verified against that tool's docs (June 2026):
 
 | Agent | Binary | Agent | Binary |
 |-------|--------|-------|--------|
